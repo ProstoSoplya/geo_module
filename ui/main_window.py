@@ -38,6 +38,7 @@ from core.project_manager import ProjectManager
 from core.worker import AnalysisWorker
 from core.algorithms.report import generate_report
 from core.algorithms.deviation import compute_statistics, colorize_point_cloud
+from core.algorithms.dimensions import bbox_summary, suggest_unit_mismatch_hint, compute_dimensions
 from ui.panels import ControlPanel, ResultsPanel, LogPanel
 from ui.help_dialog import HelpDialog, AboutDialog
 from ui.viewer_widget import ViewerWidget
@@ -323,6 +324,8 @@ class MainWindow(QMainWindow):
                 f"  Вершин: {len(self.manager.mesh.vertices):,}, "
                 f"треугольников: {len(self.manager.mesh.triangles):,}"
             )
+            (lx, ly, lz), diag = bbox_summary(self.manager.mesh)
+            self._log(f"  Габариты: {lx:.1f} x {ly:.1f} x {lz:.1f} мм  (диаг. {diag:.1f} мм)")
             self.results_panel.reset()
             self.viewer.load_mesh_preview(self.manager.mesh)
         except Exception as e:
@@ -363,6 +366,8 @@ class MainWindow(QMainWindow):
             if not cancelled:
                 self._log(f"Облако точек загружено: {os.path.basename(path)}")
                 self._log(f"  Точек: {n_points:,}")
+                (lx, ly, lz), diag = bbox_summary(self.manager.pcd)
+                self._log(f"  Габариты: {lx:.1f} x {ly:.1f} x {lz:.1f} мм  (диаг. {diag:.1f} мм)")
                 self.results_panel.reset()
                 if self.manager.mesh is None:
                     self.viewer.clear()
@@ -418,11 +423,13 @@ class MainWindow(QMainWindow):
                 msg = QMessageBox(self)
                 msg.setWindowTitle("Предупреждение о размерах")
                 msg.setIcon(QMessageBox.Icon.Warning)
+                hint = suggest_unit_mismatch_hint(ratio)
+                hint_line = f"\n\nВероятная причина: {hint}" if hint else ""
                 msg.setText(
                     f"Размеры модели и скана сильно отличаются.\n\n"
-                    f"Модель: {mesh_diag:.1f} ед.  |  Скан: {pcd_diag:.1f} ед.\n"
-                    f"Разница: {ratio:.1f}×\n\n"
-                    "Проверьте единицы измерения (мм / м / дюймы).\n"
+                    f"Модель: {mesh_diag:.1f} мм  |  Скан: {pcd_diag:.1f} мм\n"
+                    f"Разница: {ratio:.1f}×{hint_line}\n\n"
+                    "Проверьте панель «Единицы измерения».\n"
                     "Совмещение может не работать."
                 )
                 btn_cont = msg.addButton("Продолжить", QMessageBox.ButtonRole.AcceptRole)
@@ -598,6 +605,7 @@ class MainWindow(QMainWindow):
                 # Пересчитываем статистику с текущим допуском
                 new_stats = compute_statistics(deviations, tolerance)
                 new_stats["registration_rmse"] = saved_stats.get("registration_rmse", 0)
+                new_stats["dimensions"] = compute_dimensions(self.manager.mesh, pcd_reg)
 
                 self.manager.deviations     = deviations
                 self.manager.transformation = npz.get("transformation")
@@ -690,6 +698,7 @@ class MainWindow(QMainWindow):
         new_stats = compute_statistics(self.manager.deviations, tolerance)
         # registration_rmse вычисляется один раз при полном анализе — сохраняем его
         new_stats["registration_rmse"] = self.manager.stats.get("registration_rmse", 0)
+        new_stats["dimensions"] = self.manager.stats.get("dimensions")
 
         new_pcd = colorize_point_cloud(
             self.manager.pcd_colored, self.manager.deviations, tolerance, colormap

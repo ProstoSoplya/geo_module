@@ -304,6 +304,11 @@ class ControlPanel(QWidget):
         self._cad_unit_combo.currentIndexChanged.connect(self._on_cad_unit_changed)
         self._scan_unit_combo.currentIndexChanged.connect(self._on_scan_unit_changed)
 
+        note = QLabel("STL/PLY не хранят единицы.\nСверьте габариты с реальной деталью.")
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #707070; font-size: 9px;")
+        gl.addWidget(note)
+
         return group
 
     @staticmethod
@@ -588,6 +593,31 @@ class ResultsPanel(QWidget):
         self.verdict_label.setStyleSheet("padding: 6px; border-radius: 4px; color: #c0c0c0;")
         layout.addWidget(self.verdict_label)
 
+        layout.addSpacing(6)
+        dim_group = QGroupBox("Габаритные размеры")
+        dg = QVBoxLayout(dim_group)
+        dg.setContentsMargins(6, 4, 6, 4)
+        dg.setSpacing(2)
+        for attr, lbl_text in [
+            ("_dim_cad",   "CAD:"),
+            ("_dim_scan",  "Скан:"),
+            ("_dim_delta", "Δ:"),
+        ]:
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(2, 1, 2, 1)
+            name_lbl = QLabel(lbl_text)
+            name_lbl.setMinimumWidth(38)
+            val_lbl = QLabel("—")
+            val_lbl.setFont(QFont("Courier New", 9))
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+            val_lbl.setWordWrap(True)
+            rl.addWidget(name_lbl)
+            rl.addWidget(val_lbl, 1)
+            dg.addWidget(row)
+            setattr(self, attr, val_lbl)
+        layout.addWidget(dim_group)
+
         layout.addStretch()
 
     def update_results(self, stats: dict):
@@ -620,11 +650,26 @@ class ResultsPanel(QWidget):
                 "background: #7f0000; color: #FFCDD2; font-weight: bold;"
             )
 
+        dims = stats.get("dimensions")
+        if dims is not None:
+            def _f3(t):
+                return f"{t[0]:.1f} x {t[1]:.1f} x {t[2]:.1f} мм"
+            self._dim_cad.setText(_f3(dims["cad"]))
+            self._dim_scan.setText(_f3(dims["scan"]) if dims["scan"] is not None else "—")
+            if dims["delta"] is not None:
+                d = dims["delta"]
+                self._dim_delta.setText(f"{d[0]:+.2f} x {d[1]:+.2f} x {d[2]:+.2f} мм")
+            else:
+                self._dim_delta.setText("—")
+
     def reset(self):
         for key, (label, _) in self._labels.items():
             label.setText("—")
         self.verdict_label.setText("Ожидание анализа...")
         self.verdict_label.setStyleSheet("padding: 6px; border-radius: 4px; color: #c0c0c0;")
+        self._dim_cad.setText("—")
+        self._dim_scan.setText("—")
+        self._dim_delta.setText("—")
 
 
 # ──────────────────────────────────────────────────────────────────

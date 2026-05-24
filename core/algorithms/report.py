@@ -247,7 +247,49 @@ def generate_report(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(res_table)
-    story.append(Spacer(1, 6 * mm))
+    story.append(Spacer(1, 5 * mm))
+
+    # Габаритные размеры
+    dims = stats.get("dimensions")
+    if dims is not None:
+        story.append(Paragraph("Габаритные размеры", h2_style))
+        cad_d   = dims.get("cad",  (0.0, 0.0, 0.0))
+        scan_d  = dims.get("scan")
+        delta_d = dims.get("delta")
+        cw4 = (USABLE_W - 45 * mm) / 4
+        dim_rows = [
+            [Paragraph("<b>Параметр</b>",  body_style),
+             Paragraph("<b>X, мм</b>",      body_style),
+             Paragraph("<b>Y, мм</b>",      body_style),
+             Paragraph("<b>Z, мм</b>",      body_style),
+             Paragraph("<b>Диаг., мм</b>",  body_style)],
+            ["CAD-модель",
+             f"{cad_d[0]:.2f}", f"{cad_d[1]:.2f}", f"{cad_d[2]:.2f}",
+             f"{dims.get('cad_diag', 0.0):.2f}"],
+        ]
+        if scan_d is not None:
+            dim_rows.append(["Скан",
+                f"{scan_d[0]:.2f}", f"{scan_d[1]:.2f}", f"{scan_d[2]:.2f}",
+                f"{dims.get('scan_diag', 0.0):.2f}"])
+        if delta_d is not None:
+            dim_rows.append(["Δ (Скан − CAD)",
+                f"{delta_d[0]:+.2f}", f"{delta_d[1]:+.2f}", f"{delta_d[2]:+.2f}", "—"])
+        dim_table = Table(dim_rows, colWidths=[45 * mm, cw4, cw4, cw4, cw4])
+        dim_table.setStyle(TableStyle([
+            ("FONTNAME",   (0, 0), (-1, -1), font_reg),
+            ("FONTNAME",   (0, 0), (-1,  0), font_bold),
+            ("FONTSIZE",   (0, 0), (-1, -1), 10),
+            ("BACKGROUND", (0, 0), (-1,  0), colors.HexColor("#3949AB")),
+            ("TEXTCOLOR",  (0, 0), (-1,  0), colors.white),
+            ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.white, colors.HexColor("#F5F5F5")]),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ]))
+        story.append(dim_table)
+        story.append(Spacer(1, 5 * mm))
 
     # Заключение
     verdict_word = "СООТВЕТСТВУЕТ" if passed else "НЕ СООТВЕТСТВУЕТ"

@@ -29,6 +29,7 @@ from core.algorithms.deviation import (
     compute_statistics,
     colorize_point_cloud,
 )
+from core.algorithms.dimensions import compute_dimensions
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +173,17 @@ class AnalysisWorker(QThread):
         tolerance = self.config["analysis"]["tolerance_mm"]
         stats = compute_statistics(deviations, tolerance)
         stats["registration_rmse"] = reg_rmse
+        dims = compute_dimensions(self.mesh, pcd_registered)
+        stats["dimensions"] = dims
+        self._log(
+            f"   Габариты CAD: {dims['cad'][0]:.1f} x {dims['cad'][1]:.1f} x "
+            f"{dims['cad'][2]:.1f} мм  (диаг. {dims['cad_diag']:.1f} мм)"
+        )
+        if dims["scan"] is not None:
+            self._log(
+                f"   Габариты скана: {dims['scan'][0]:.1f} x {dims['scan'][1]:.1f} x "
+                f"{dims['scan'][2]:.1f} мм  (диаг. {dims['scan_diag']:.1f} мм)"
+            )
 
         self._log("⑤ Раскраска облака точек по отклонениям...")
         colormap_name = self.config.get("ui", {}).get("colormap", "coolwarm")
