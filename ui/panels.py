@@ -215,7 +215,7 @@ class ControlPanel(QWidget):
         )
 
         self._icp_iter_spin = self._make_int_spin(
-            int(reg.get("icp_max_iter", 140)), 10, 200, 10,
+            int(reg["icp_max_iter"]), 10, 200, 10,
             "Предел итераций"
         )
         rg.addLayout(self._spin_row("Итераций ICP:", self._icp_iter_spin))

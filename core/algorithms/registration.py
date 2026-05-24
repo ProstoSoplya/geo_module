@@ -304,7 +304,7 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
         progress_callback(52)
 
     # ── Шаг 5: Мультистарт RANSAC ────────────────────────────────
-    ransac_max_iter = config["registration"].get("ransac_max_iter", 200000)
+    ransac_max_iter = config["registration"]["ransac_max_iter"]
     ransac_n_starts = config["registration"].get("ransac_n_starts", 5)
     logger.info(
         f"Запуск RANSAC ({ransac_n_starts} попыток, "
@@ -356,7 +356,7 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
         init_transform,
         dist1=icp_dist1,
         dist2=icp_dist2,
-        max_iter=config["registration"].get("icp_max_iter", 150),
+        max_iter=config["registration"]["icp_max_iter"],
         timeout=60,
         progress_callback=progress_callback,
         _prog_mid=73

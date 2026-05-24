@@ -273,10 +273,28 @@ def setup_logging():
     )
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """
+    Рекурсивное слияние двух словарей.
+    Берёт base как основу и накладывает значения из override поверх.
+    Если оба значения — словари, рекурсивно сливает их (не заменяет секцию целиком).
+    Возвращает новый словарь; base и override не мутируются.
+    """
+    result = dict(base)
+    for key, val in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(val, dict):
+            result[key] = _deep_merge(result[key], val)
+        else:
+            result[key] = val
+    return result
+
+
 def load_config(path: str = "config.json") -> dict:
     """
     Загружает конфигурацию из JSON-файла.
     Если файл не найден — возвращает значения по умолчанию.
+    Если файл есть, но содержит только часть ключей — недостающие
+    восстанавливаются из дефолтов через глубокое слияние.
     """
     defaults = {
         "preprocessing": {
@@ -285,11 +303,14 @@ def load_config(path: str = "config.json") -> dict:
             "voxel_size": 0
         },
         "registration": {
-            "ransac_max_iter": 100000,
+            # 200000 итераций — нижняя граница надёжной сходимости RANSAC;
+            # 150 итераций ICP — достаточно для relative_fitness/rmse=1e-6.
+            # Оба значения согласованы с логикой registration.py.
+            "ransac_max_iter": 200000,
             "ransac_n_starts": 5,
             "icp_coarse_pct": 5.0,
             "icp_fine_pct": 1.0,
-            "icp_max_iter": 100
+            "icp_max_iter": 150
         },
         "analysis": {
             "tolerance_mm": 0.5,
@@ -310,7 +331,7 @@ def load_config(path: str = "config.json") -> dict:
         with open(path, "r", encoding="utf-8") as f:
             config = json.load(f)
         logging.info(f"Конфигурация загружена из {path}")
-        return config
+        return _deep_merge(defaults, config)
     except Exception as e:
         logging.error(f"Ошибка чтения config.json: {e}")
         return defaults
