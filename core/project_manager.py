@@ -23,6 +23,16 @@ import open3d as o3d
 
 logger = logging.getLogger(__name__)
 
+# Коэффициенты перевода единиц файла в миллиметры.
+# "as_is" означает «не масштабировать» (файл уже в нужной шкале).
+UNIT_TO_MM: dict[str, float] = {
+    "mm":    1.0,
+    "cm":   10.0,
+    "m":  1000.0,
+    "in":   25.4,
+    "as_is": 1.0,
+}
+
 
 class ProjectManager:
     """
@@ -56,6 +66,10 @@ class ProjectManager:
         self.cad_path:  Optional[str] = None
         self.scan_path: Optional[str] = None
 
+        # Единицы измерения, в которых был загружен каждый файл
+        self.unit_cad:  str = "mm"
+        self.unit_scan: str = "mm"
+
         # Метаданные
         self.results:      Optional[dict] = None
         self.project_path: Optional[str]  = None
@@ -65,22 +79,31 @@ class ProjectManager:
 
     # ── Загрузка файлов ────────────────────────────────────────────
 
-    def load_cad(self, path: str) -> o3d.geometry.TriangleMesh:
+    def load_cad(self, path: str, unit: str = None) -> o3d.geometry.TriangleMesh:
         """
         Загружает CAD-модель из STL/OBJ файла.
 
-        После загрузки:
-            - Вычисляет нормали вершин (нужны для ICP Point-to-Plane)
-            - Проверяет, что меш не пустой
-            - Нормализует масштаб если нужно
-
-        Возвращает меш или бросает исключение при ошибке.
+        unit — единица измерения файла ("mm", "cm", "m", "in", "as_is").
+        Если не передана — берётся из config["units"]["cad"].
+        Масштабирование к мм происходит сразу после чтения, до любых
+        вычислений bounding box, от которых зависят адаптивные пороги.
         """
+        if unit is None:
+            unit = self.config.get("units", {}).get("cad", "mm")
+
         logger.info(f"Загрузка CAD-модели: {path}")
         mesh = o3d.io.read_triangle_mesh(path)
 
         if len(mesh.vertices) == 0:
             raise ValueError(f"Файл {os.path.basename(path)} пустой или повреждён")
+
+        # Масштабирование к мм — ДО любых вычислений AABB/нормалей
+        factor = UNIT_TO_MM.get(unit, 1.0)
+        if factor != 1.0:
+            mesh.scale(factor, center=(0.0, 0.0, 0.0))
+            logger.info(f"CAD: масштаб x{factor} ({unit} -> мм)")
+        else:
+            logger.info(f"CAD: масштаб не применяется (единица: {unit})")
 
         # Вычисляем нормали — нужны для Point-to-Plane ICP
         mesh.compute_vertex_normals()
@@ -91,6 +114,7 @@ class ProjectManager:
 
         self.mesh     = mesh
         self.cad_path = path
+        self.unit_cad = unit
 
         # Сбрасываем результаты при загрузке нового файла
         self._reset_results()
@@ -101,12 +125,17 @@ class ProjectManager:
         )
         return mesh
 
-    def load_scan(self, path: str) -> o3d.geometry.PointCloud:
+    def load_scan(self, path: str, unit: str = None) -> o3d.geometry.PointCloud:
         """
         Загружает облако точек из PLY/PCD/XYZ файла.
 
-        После загрузки проверяет минимальное количество точек.
+        unit — единица измерения файла ("mm", "cm", "m", "in", "as_is").
+        Если не передана — берётся из config["units"]["scan"].
+        Масштабирование к мм происходит сразу после чтения.
         """
+        if unit is None:
+            unit = self.config.get("units", {}).get("scan", "mm")
+
         logger.info(f"Загрузка облака точек: {path}")
         pcd = o3d.io.read_point_cloud(path)
 
@@ -116,8 +145,17 @@ class ProjectManager:
                 f"Минимум — 100. Проверьте файл."
             )
 
+        # Масштабирование к мм — ДО любых вычислений AABB
+        factor = UNIT_TO_MM.get(unit, 1.0)
+        if factor != 1.0:
+            pcd.scale(factor, center=(0.0, 0.0, 0.0))
+            logger.info(f"Скан: масштаб x{factor} ({unit} -> мм)")
+        else:
+            logger.info(f"Скан: масштаб не применяется (единица: {unit})")
+
         self.pcd       = pcd
         self.scan_path = path
+        self.unit_scan = unit
 
         # Сбрасываем результаты при загрузке нового файла
         self._reset_results()
@@ -155,10 +193,12 @@ class ProjectManager:
         has_results = self.deviations is not None
 
         project = {
-            "version":       "1.1",
+            "version":       "1.2",
             "saved_at":      datetime.now().isoformat(),
             "cad_path":      self.cad_path,
             "scan_path":     self.scan_path,
+            "unit_cad":      self.unit_cad,
+            "unit_scan":     self.unit_scan,
             "config":        self.config,
             "analysis_date": self.analysis_date,
             "stats":         self.stats,
@@ -199,16 +239,21 @@ class ProjectManager:
 
         # Загружаем файлы (не бросаем исключение — сообщаем через missing_files)
         missing_files = []
+        # Единицы берём из явных полей проекта; если их нет (старый формат) —
+        # из обновлённого config["units"] (который уже обновлён строкой выше).
+        saved_unit_cad  = project.get("unit_cad",  self.config.get("units", {}).get("cad",  "mm"))
+        saved_unit_scan = project.get("unit_scan", self.config.get("units", {}).get("scan", "mm"))
+
         if project.get("cad_path"):
             if os.path.exists(project["cad_path"]):
-                self.load_cad(project["cad_path"])
+                self.load_cad(project["cad_path"], unit=saved_unit_cad)
             else:
                 self.cad_path = project["cad_path"]   # сохраняем путь для информации
                 missing_files.append(project["cad_path"])
 
         if project.get("scan_path"):
             if os.path.exists(project["scan_path"]):
-                self.load_scan(project["scan_path"])
+                self.load_scan(project["scan_path"], unit=saved_unit_scan)
             else:
                 self.scan_path = project["scan_path"]
                 missing_files.append(project["scan_path"])

@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 _COLORMAPS = ["coolwarm", "RdYlGn_r", "jet"]
 
+# (label, config_key) для комбобоксов единиц измерения
+_UNIT_ITEMS = [
+    ("мм",      "mm"),
+    ("см",      "cm"),
+    ("м",       "m"),
+    ("дюйм",    "in"),
+    ("как есть","as_is"),
+]
+
 
 class _ArrowOnHoverFilter(QObject):
     """Показывает стрелку при наведении на кнопку, когда активен глобальный WaitCursor."""
@@ -79,6 +88,13 @@ class ControlPanel(QWidget):
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         outer.addWidget(sep)
+
+        # ── Группа единиц — всегда видима (вне скролла) ──────────
+        outer.addWidget(self._build_units_group())
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.HLine)
+        outer.addWidget(sep2)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -265,6 +281,71 @@ class ControlPanel(QWidget):
 
         return w
 
+    def _build_units_group(self) -> QWidget:
+        """Группа «Единицы измерения» — два комбобокса CAD и Скан."""
+        units = self.config.get("units", {})
+
+        group = QGroupBox("Единицы измерения")
+        gl = QVBoxLayout(group)
+        gl.setContentsMargins(6, 4, 6, 6)
+        gl.setSpacing(4)
+
+        hint = QLabel("Выберите единицы файлов.\nПрограмма приведёт всё к мм.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #909090; font-size: 10px;")
+        gl.addWidget(hint)
+
+        self._cad_unit_combo  = self._make_unit_combo(units.get("cad",  "mm"))
+        self._scan_unit_combo = self._make_unit_combo(units.get("scan", "mm"))
+
+        gl.addLayout(self._unit_row("CAD:",  self._cad_unit_combo))
+        gl.addLayout(self._unit_row("Скан:", self._scan_unit_combo))
+
+        self._cad_unit_combo.currentIndexChanged.connect(self._on_cad_unit_changed)
+        self._scan_unit_combo.currentIndexChanged.connect(self._on_scan_unit_changed)
+
+        return group
+
+    @staticmethod
+    def _set_unit_combo(combo: QComboBox, key: str):
+        """Устанавливает комбобокс по ключу единицы ("mm", "cm", …)."""
+        if key is None:
+            return
+        for i in range(combo.count()):
+            if combo.itemData(i) == key:
+                combo.setCurrentIndex(i)
+                return
+
+    @staticmethod
+    def _make_unit_combo(current_key: str) -> QComboBox:
+        combo = QComboBox()
+        for label, key in _UNIT_ITEMS:
+            combo.addItem(label, key)
+        for i in range(combo.count()):
+            if combo.itemData(i) == current_key:
+                combo.setCurrentIndex(i)
+                break
+        combo.setFixedWidth(100)
+        return combo
+
+    @staticmethod
+    def _unit_row(label_text: str, combo: QComboBox) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        lbl = QLabel(label_text)
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        row.addWidget(lbl)
+        row.addWidget(combo)
+        return row
+
+    def _on_cad_unit_changed(self):
+        if not self._updating:
+            self.param_changed.emit(["units", "cad"], self._cad_unit_combo.currentData())
+
+    def _on_scan_unit_changed(self):
+        if not self._updating:
+            self.param_changed.emit(["units", "scan"], self._scan_unit_combo.currentData())
+
     # ── Слоты ─────────────────────────────────────────────────────
 
     def _on_mode_changed(self, checked: bool):
@@ -425,6 +506,10 @@ class ControlPanel(QWidget):
 
             if "colormap" in ui and ui["colormap"] in _COLORMAPS:
                 self._colormap_combo.setCurrentText(ui["colormap"])
+
+            units = config.get("units", {})
+            self._set_unit_combo(self._cad_unit_combo,  units.get("cad"))
+            self._set_unit_combo(self._scan_unit_combo, units.get("scan"))
         finally:
             self._updating = False
 

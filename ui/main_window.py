@@ -517,7 +517,9 @@ class MainWindow(QMainWindow):
                 registration_rmse=self.manager.stats.get("registration_rmse", 0),
                 screenshot_paths=screenshot_paths,
                 mesh_triangles=len(mesh.triangles) if mesh is not None else 0,
-                config=self.config
+                config=self.config,
+                unit_cad=self.manager.unit_cad,
+                unit_scan=self.manager.unit_scan,
             )
             self._log(f"Отчёт сохранён: {path}")
             QMessageBox.information(self, "Готово", f"Отчёт сохранён:\n{path}")
@@ -725,6 +727,19 @@ class MainWindow(QMainWindow):
             self.results_panel.set_threshold(value)
             if self.manager.stats is not None:
                 self.results_panel.update_results(self.manager.stats)
+
+        # При смене единиц для уже загруженного файла — перезагружаем его
+        # с новым коэффициентом. Сравниваем со значением, уже применённым к
+        # геометрии (unit_cad/unit_scan), чтобы избежать лишней перезагрузки
+        # при apply_config после открытия проекта.
+        if key_path == ["units", "cad"] and self.manager.cad_path:
+            if value != self.manager.unit_cad:
+                self._log(f"Единица CAD изменена на «{value}», перезагрузка...")
+                self._load_cad_from_path(self.manager.cad_path)
+        elif key_path == ["units", "scan"] and self.manager.scan_path:
+            if value != self.manager.unit_scan:
+                self._log(f"Единица скана изменена на «{value}», перезагрузка...")
+                self._load_scan_from_path(self.manager.scan_path)
 
     def _set_analysis_running(self, running: bool):
         self.btn_load_cad.setEnabled(not running)

@@ -111,6 +111,8 @@ def generate_report(
     screenshot_paths: list[str] | None = None,
     mesh_triangles: int = 0,
     config: dict = None,
+    unit_cad: str = "mm",
+    unit_scan: str = "mm",
 ) -> str:
     """
     Генерирует 3-страничный PDF-отчёт.
@@ -186,14 +188,22 @@ def generate_report(
 
     # Таблица входных данных
     story.append(Paragraph("Входные данные", h2_style))
+    _unit_labels = {
+        "mm": "мм", "cm": "см", "m": "м", "in": "дюйм", "as_is": "как есть"
+    }
+    unit_str = (
+        f"мм  (CAD загружен в {_unit_labels.get(unit_cad, unit_cad)}, "
+        f"скан в {_unit_labels.get(unit_scan, unit_scan)})"
+    )
     input_rows = [
         [Paragraph("<b>Параметр</b>", body_style),
          Paragraph("<b>Значение</b>",  body_style)],
-        ["CAD-модель",         os.path.basename(cad_path)],
+        ["CAD-модель",          os.path.basename(cad_path)],
         ["Треугольников (CAD)", f"{mesh_triangles:,}" if mesh_triangles else "—"],
-        ["Облако точек",       os.path.basename(scan_path)],
-        ["Точек в скане",      f"{n_points:,}" if n_points else "—"],
-        ["Допуск",             f"±{tolerance:.3f} мм"],
+        ["Облако точек",        os.path.basename(scan_path)],
+        ["Точек в скане",       f"{n_points:,}" if n_points else "—"],
+        ["Единицы измерения",   unit_str],
+        ["Допуск",              f"±{tolerance:.3f} мм"],
     ]
     col_w = [55 * mm, USABLE_W - 55 * mm]
     in_table = Table(input_rows, colWidths=col_w)

@@ -320,6 +320,10 @@ def load_config(path: str = "config.json") -> dict:
             "advanced_mode": False,
             "colormap": "RdYlGn_r",
             "last_dir": ""
+        },
+        "units": {
+            "cad":  "mm",
+            "scan": "mm"
         }
     }
 
