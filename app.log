@@ -1,0 +1,48 @@
+19:33:37 [INFO] main: ============================================================
+19:33:37 [INFO] main: Запуск приложения
+19:33:37 [INFO] root: Конфигурация загружена из config.json
+19:34:04 [INFO] core.project_manager: ProjectManager инициализирован
+19:34:06 [INFO] ui.main_window: Главное окно инициализировано
+19:34:06 [INFO] main: Главное окно открыто
+19:35:23 [INFO] core.project_manager: Загрузка CAD-модели: C:/project/geo_module/Green_Alien.stl
+19:35:24 [INFO] core.project_manager: CAD загружена: 615,460 вершин, 206,140 треугольников
+19:35:33 [INFO] core.project_manager: Загрузка облака точек: C:/project/geo_module/scan.ply
+19:35:33 [INFO] core.project_manager: Скан загружен: 76,784 точек
+19:35:35 [INFO] core.worker: ① Предобработка облака точек...
+19:35:35 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 76,784
+19:35:35 [INFO] core.algorithms.preprocessing: SOR: удалено 348 выбросов. Осталось: 76,436 точек
+19:35:35 [INFO] core.algorithms.preprocessing: Авто voxel_size = 1.8579 (1.5% от диагонали bbox облака 123.86)
+19:35:35 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=1.8579. Точек: 76,436
+19:35:35 [INFO] core.algorithms.preprocessing: Voxel Grid: 76,436 → 3,826 точек (уменьшено в 20.0x)
+19:35:35 [INFO] core.worker:    Предобработка завершена. Осталось точек: 76,436 (полное), 3,826 (прореженное)
+19:35:35 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+19:35:35 [INFO] core.algorithms.registration: Размер модели: [64.11 64.01 80.  ] мм, диагональ: 120.86 мм
+19:35:35 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=2.417, fpfh_r=6.043, ransac_d=3.626
+19:35:35 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=1.8579, адаптивный voxel=2.4173 (разница > 20%)
+19:35:36 [INFO] core.algorithms.registration: Предвыравнивание: смещение [16.311 14.481 -8.873] мм
+19:35:36 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+19:35:36 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций каждая)...
+19:35:38 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=1.0000, rmse=0.9487
+19:35:41 [INFO] core.algorithms.registration:   RANSAC [2/6]: fitness=1.0000, rmse=0.7042
+19:35:43 [INFO] core.algorithms.registration:   RANSAC [3/6]: fitness=0.9983, rmse=1.4784
+19:35:45 [INFO] core.algorithms.registration:   RANSAC [4/6]: fitness=1.0000, rmse=1.5127
+19:35:48 [INFO] core.algorithms.registration:   RANSAC [5/6]: fitness=0.9882, rmse=1.5925
+19:35:50 [INFO] core.algorithms.registration:   RANSAC [6/6]: fitness=1.0000, rmse=1.1757
+19:35:50 [INFO] core.algorithms.registration: RANSAC лучший: fitness=1.0000
+19:35:50 [INFO] core.algorithms.registration: Запуск двухпроходного ICP: грубый=4.230 мм (3.5%), точный=1.571 мм (1.3%)...
+19:35:50 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.218853, fitness=1.0000
+19:35:50 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.217597, fitness=0.9998
+19:35:50 [INFO] core.algorithms.registration: Регистрация завершена: fitness=0.9998, RMSE=0.217597 мм
+19:35:50 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.217597 мм
+19:35:50 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+19:35:51 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+19:35:51 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+19:35:51 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения восстанавливается по нормали ближайшей грани.
+19:35:52 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -2.0743, Макс: 2.1092, Среднее: -0.0032
+19:35:52 [INFO] core.worker: ④ Вычисление статистики...
+19:35:52 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0032, RMSE=0.0552, макс|отклонение|=2.1092, в допуске=88.3%
+19:35:52 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+19:35:52 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: -0.0032 мм, в допуске: 88.3%
+19:35:52 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+19:36:05 [INFO] core.project_manager: Конфиг сохранён: config.json
+19:36:05 [INFO] main: Приложение завершено с кодом 0

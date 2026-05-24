@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+*.npz
+*.pdf
+config.json
+*.json
+tests/test_suite/
