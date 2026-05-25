@@ -135,7 +135,7 @@ class AnalysisWorker(QThread):
         self._log("② Регистрация (совмещение скана с CAD-моделью)...")
         self._emit_progress(35)
 
-        pcd_registered, transform, reg_rmse = register_pipeline(
+        pcd_registered, transform, reg_rmse, reg_suspect = register_pipeline(
             pcd_clean,
             pcd_down,
             self.mesh,
@@ -145,9 +145,14 @@ class AnalysisWorker(QThread):
         )
         self._log(f"   ICP завершён. RMSE совмещения: {reg_rmse:.6f} мм")
 
-        if reg_rmse > 1.0:
+        if reg_suspect:
             self._log(
-                "   ⚠ Высокий RMSE! Проверьте качество данных или "
+                "   [SUSPECT REGISTRATION] Лучший кандидат имеет большой C2M-RMSE. "
+                "Регистрация может быть неверной — проверьте визуально."
+            )
+        elif reg_rmse > 1.0:
+            self._log(
+                "   [WARNING] Высокий ICP RMSE! Проверьте качество данных или "
                 "увеличьте диапазон RANSAC."
             )
 
@@ -172,7 +177,8 @@ class AnalysisWorker(QThread):
         self._log("④ Вычисление статистики...")
         tolerance = self.config["analysis"]["tolerance_mm"]
         stats = compute_statistics(deviations, tolerance, ambiguous_mask=ambiguous_mask)
-        stats["registration_rmse"] = reg_rmse
+        stats["registration_rmse"]    = reg_rmse
+        stats["registration_suspect"] = reg_suspect
         dims = compute_dimensions(self.mesh, pcd_registered)
         stats["dimensions"] = dims
         self._log(

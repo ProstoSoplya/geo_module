@@ -1,23 +1,22 @@
 """
 registration.py — Регистрация облака точек с CAD-моделью.
 
-Ключевое улучшение: все параметры вычисляются АВТОМАТИЧЕСКИ
-из диагонали ограничивающего прямоугольника модели.
-Это решает проблему «параметры не подходят к масштабу модели».
-
 Пайплайн:
-    1. Автоматический расчёт параметров по размеру модели
-    2. Предвыравнивание по центрам масс (детерминированное)
-    3. Мультистарт RANSAC + FPFH (5 попыток)
-    4. Двухпроходный Point-to-Plane ICP
-    5. Fallback: если всё провалилось — только центроиды + ICP
+    1. Адаптивные параметры из bbox-диагонали модели
+    2. Центроидное предвыравнивание (детерминированное)
+    3. PCA-гипотезы (4 знаковые комбинации главных осей, det=+1)
+    4. Мультистарт RANSAC — top-K лучших по fitness
+    5. Выбор победителя по C2M-RMSE через готовую RaycastingScene (BVH строится 1 раз)
+    6. Двухпроходный Point-to-Plane ICP от уточнённой матрицы победителя
+    7. Флаг registration_suspect при большом C2M-RMSE победителя
 """
 
 import concurrent.futures
 import copy
 import logging
-import open3d as o3d
+
 import numpy as np
+import open3d as o3d
 
 logger = logging.getLogger(__name__)
 
@@ -26,50 +25,41 @@ class RegistrationError(RuntimeError):
     """Ошибка регистрации — модели несовместимы."""
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Вспомогательные функции
+# ──────────────────────────────────────────────────────────────────────────────
+
 def _compute_adaptive_params(mesh: o3d.geometry.TriangleMesh) -> dict:
     """
-    Вычисляет параметры алгоритмов автоматически,
-    исходя из реального размера модели.
-
-    Диагональ ограничивающего прямоугольника (bbox_diag) —
-    это «характерный масштаб» объекта. Все пороги задаём
-    как доли от этого масштаба. Это работает для моделей
-    любого размера: 10 мм или 1000 мм.
+    Вычисляет параметры алгоритмов автоматически из реального размера модели.
+    Все пороги — доли от bbox-диагонали; работает для моделей любого масштаба.
     """
-    bbox = mesh.get_axis_aligned_bounding_box()
-    extent = bbox.get_extent()
+    bbox      = mesh.get_axis_aligned_bounding_box()
+    extent    = bbox.get_extent()
     bbox_diag = float(np.linalg.norm(extent))
 
     params = {
-        "voxel_size":       bbox_diag * 0.02,   # 2% от диагонали
-        "fpfh_radius":      bbox_diag * 0.05,   # 5% от диагонали
-        "ransac_distance":  bbox_diag * 0.03,   # 3% от диагонали
-        "bbox_diag":        bbox_diag,
+        "voxel_size":      bbox_diag * 0.02,
+        "fpfh_radius":     bbox_diag * 0.05,
+        "ransac_distance": bbox_diag * 0.03,
+        "bbox_diag":       bbox_diag,
     }
-
     logger.info(
-        f"Размер модели: {extent.round(2)} мм, "
-        f"диагональ: {bbox_diag:.2f} мм"
+        f"Размер модели: {extent.round(2)} мм, диагональ: {bbox_diag:.2f} мм"
     )
     logger.info(
-        f"Адаптивные параметры: "
-        f"voxel={params['voxel_size']:.3f}, "
-        f"fpfh_r={params['fpfh_radius']:.3f}, "
-        f"ransac_d={params['ransac_distance']:.3f}"
+        f"Адаптивные параметры: voxel={params['voxel_size']:.3f}, "
+        f"fpfh_r={params['fpfh_radius']:.3f}, ransac_d={params['ransac_distance']:.3f}"
     )
-
     return params
 
 
 def _prepare_clouds(pcd_full, pcd_down, mesh, ap, progress_callback=None,
                      _prog_start=35, _prog_end=45):
     """
-    Подготавливает все облака точек: прореживает, вычисляет нормали.
-
-    Оптимизация: orient_normals_consistent_tangent_plane (k=15) применяется
-    только к облакам скана — для облаков CAD-сетки нормали уже согласованы
-    геометрически (uniform sampling от меша с vertex normals).
-    Это даёт ~2× ускорение при минимальной потере качества нормалей.
+    Подготавливает облака точек: прореживает меш, вычисляет нормали.
+    orient_normals_consistent_tangent_plane применяется только к pcd_down —
+    для облаков с меша нормали уже согласованы геометрически.
     """
     search_param = o3d.geometry.KDTreeSearchParamHybrid(
         radius=ap["fpfh_radius"], max_nn=30
@@ -78,30 +68,21 @@ def _prepare_clouds(pcd_full, pcd_down, mesh, ap, progress_callback=None,
     mesh.compute_vertex_normals()
     mesh.compute_triangle_normals()
 
-    # Uniform + use_triangle_normal=True: нормали сразу от граней меша,
-    # не нужно вызывать estimate_normals на mesh_pcd. Poisson-disk на больших
-    # мешах занимает десятки секунд (rejection-sampling), uniform — доли секунды.
     mesh_pcd_full = mesh.sample_points_uniformly(
         number_of_points=max(len(pcd_full.points), 50000),
-        use_triangle_normal=True
+        use_triangle_normal=True,
     )
     mesh_pcd_down = mesh.sample_points_uniformly(
         number_of_points=max(len(pcd_down.points), 20000),
-        use_triangle_normal=True
+        use_triangle_normal=True,
     )
 
     prog_step = (_prog_end - _prog_start) / 3
 
-    # pcd_full: только estimate_normals, БЕЗ orient_normals_consistent_tangent_plane.
-    # Riemannian MST по 500K–1M точкам занимает 30–120 с, а для нашей задачи не нужен:
-    # Point-to-Plane ICP использует квадрат проекции (знак нормали не влияет),
-    # RaycastingScene определяет знак отклонения сам по нормали ближайшей грани.
     pcd_full.estimate_normals(search_param)
     if progress_callback:
         progress_callback(int(_prog_start + prog_step))
 
-    # pcd_down: estimate + orient. Облако в 10–50× меньше, согласование быстрое,
-    # ориентация помогает FPFH/RANSAC точнее матчить дескрипторы.
     pcd_down.estimate_normals(search_param)
     pcd_down.orient_normals_consistent_tangent_plane(k=15)
     if progress_callback:
@@ -117,58 +98,132 @@ def _compute_fpfh(pcd: o3d.geometry.PointCloud, radius: float):
     """Вычисляет FPFH-дескрипторы."""
     return o3d.pipelines.registration.compute_fpfh_feature(
         pcd,
-        o3d.geometry.KDTreeSearchParamHybrid(radius=radius, max_nn=100)
+        o3d.geometry.KDTreeSearchParamHybrid(radius=radius, max_nn=100),
     )
+
+
+def pca_alignment_candidates(pcd_pts: np.ndarray,
+                               mesh_pts: np.ndarray) -> list[np.ndarray]:
+    """
+    Возвращает 4 матрицы 4×4, каждая из которых совмещает pcd с mesh по PCA-осям.
+
+    Для обоих облаков собственные векторы ковариации сортируются по убыванию
+    собственного значения — ось i облака скана сопоставляется оси i меша.
+    4 знаковые комбинации (det(R)=+1) покрывают 180°-неоднозначность.
+    """
+    def pca_frame(pts: np.ndarray):
+        c        = pts.mean(axis=0)
+        cov      = np.cov((pts - c).T)
+        eigvals, eigvecs = np.linalg.eigh(cov)          # по возрастанию
+        idx      = np.argsort(eigvals)[::-1]             # → по убыванию
+        return c, eigvecs[:, idx]
+
+    c_pcd,  V_pcd  = pca_frame(pcd_pts)
+    c_mesh, V_mesh = pca_frame(mesh_pts)
+
+    # det(R) = det(V_mesh) · det(S) · det(V_pcd)  (все ±1)
+    # → det(S) = det(V_mesh) · det(V_pcd)  чтобы det(R) = +1
+    target_det_S = int(round(np.linalg.det(V_mesh) * np.linalg.det(V_pcd)))
+
+    candidates: list[np.ndarray] = []
+    for s1 in (+1, -1):
+        for s2 in (+1, -1):
+            s3 = target_det_S * s1 * s2   # s1·s2·s3 = target_det_S
+            S  = np.diag([float(s1), float(s2), float(s3)])
+            R  = V_mesh @ S @ V_pcd.T
+            t  = c_mesh - R @ c_pcd
+            T  = np.eye(4)
+            T[:3, :3] = R
+            T[:3,  3] = t
+            candidates.append(T)
+    return candidates
 
 
 def _ransac_multistart(pcd_down, mesh_pcd_down,
                         fpfh_pcd, fpfh_mesh,
-                        ransac_dist, ransac_max_iter=200000, n_starts=5,
+                        ransac_dist, ransac_max_iter=200_000, n_starts=5,
+                        top_k=4,
                         progress_callback=None, _prog_start=52, _prog_end=65):
     """
-    Мультистарт RANSAC. Запускает n_starts раз, возвращает лучший по fitness.
-    progress_callback вызывается между запусками — это позволяет Qt event loop
-    обрабатывать сообщения между тяжёлыми C++ вызовами Open3D.
+    Мультистарт RANSAC. Запускает n_starts раз, возвращает top_k лучших по fitness.
     """
-    best = None
+    results = []
     prog_step = (_prog_end - _prog_start) / max(n_starts, 1)
 
     for i in range(n_starts):
-        result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-            pcd_down, mesh_pcd_down,
-            fpfh_pcd, fpfh_mesh,
-            mutual_filter=True,
-            max_correspondence_distance=ransac_dist,
-            estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
-            ransac_n=3,
-            checkers=[
-                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
-                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(ransac_dist)
-            ],
-            criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(
-                ransac_max_iter, 0.9999
+        try:
+            result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+                pcd_down, mesh_pcd_down,
+                fpfh_pcd, fpfh_mesh,
+                mutual_filter=True,
+                max_correspondence_distance=ransac_dist,
+                estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+                ransac_n=3,
+                checkers=[
+                    o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+                    o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(ransac_dist),
+                ],
+                criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(
+                    ransac_max_iter, 0.9999
+                ),
             )
-        )
-        logger.info(
-            f"  RANSAC [{i+1}/{n_starts}]: "
-            f"fitness={result.fitness:.4f}, rmse={result.inlier_rmse:.4f}"
-        )
-        if best is None or result.fitness > best.fitness:
-            best = result
+            logger.info(
+                f"  RANSAC [{i+1}/{n_starts}]: "
+                f"fitness={result.fitness:.4f}, rmse={result.inlier_rmse:.4f}"
+            )
+            results.append(result)
+        except Exception as exc:
+            logger.warning(f"  RANSAC [{i+1}/{n_starts}]: ошибка — {exc}")
 
-        # Вызов callback между запусками даёт Qt обработать сообщения Windows
         if progress_callback:
             progress_callback(int(_prog_start + prog_step * (i + 1)))
 
-    logger.info(f"RANSAC лучший: fitness={best.fitness:.4f}")
-    return best
+    if not results:
+        logger.warning("Все RANSAC-старты провалились; продолжаем без RANSAC-гипотез")
+        return []
+
+    results.sort(key=lambda r: r.fitness, reverse=True)
+    top = results[:top_k]
+    logger.info(f"RANSAC топ-{len(top)}: fitness={[f'{r.fitness:.4f}' for r in top]}")
+    return top
+
+
+def _evaluate_candidate(
+    pcd_down_aligned: o3d.geometry.PointCloud,
+    mesh_pcd_down: o3d.geometry.PointCloud,
+    scene: "o3d.t.geometry.RaycastingScene",
+    T_init: np.ndarray,
+    icp_dist: float,
+    max_iter: int = 50,
+) -> tuple[float, np.ndarray]:
+    """
+    Быстрый ICP (прореженное облако) + C2M-RMSE через готовую RaycastingScene.
+
+    BVH меша не пересобирается — scene передаётся снаружи и используется
+    всеми кандидатами. Возвращает (c2m_rmse, T_refined), где
+    T_refined: pcd_down_aligned → совмещённое положение.
+    """
+    pcd_tmp = copy.deepcopy(pcd_down_aligned).transform(T_init)
+    result  = o3d.pipelines.registration.registration_icp(
+        pcd_tmp, mesh_pcd_down, icp_dist, np.eye(4),
+        o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=max_iter),
+    )
+    # T_refined переводит pcd_down_aligned прямо в совмещённое положение
+    T_refined = result.transformation @ T_init
+
+    pcd_eval = copy.deepcopy(pcd_down_aligned).transform(T_refined)
+    pts      = np.asarray(pcd_eval.points).astype(np.float32)
+    query    = o3d.core.Tensor(pts, dtype=o3d.core.Dtype.Float32)
+    dists    = scene.compute_distance(query).numpy()
+    c2m_rmse = float(np.sqrt(np.mean(dists ** 2)))
+    return c2m_rmse, T_refined
 
 
 def _icp_with_timeout(pcd, mesh_pcd, dist, init_T, criteria, timeout=60):
     """
     Один проход ICP с таймаутом.
     Если ICP не сходится за timeout секунд — бросает TimeoutError.
-    Фоновый поток продолжает работу, но pipeline уже прерван.
     """
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
@@ -189,13 +244,11 @@ def _icp_with_timeout(pcd, mesh_pcd, dist, init_T, criteria, timeout=60):
 
 
 def _icp_two_pass(pcd, mesh_pcd, init_T, dist1, dist2, max_iter=150,
-                   timeout=60, progress_callback=None, _prog_mid=73):
+                   timeout=60, progress_callback=None, _prog_mid=76):
     """
-    ICP двумя проходами.
-    Проход 1: большой порог → устраняет крупные ошибки RANSAC.
+    ICP двумя проходами от уточнённой матрицы победителя.
+    Проход 1: большой порог → устраняет остаточные ошибки гипотезы.
     Проход 2: маленький порог → точная финальная доводка.
-    progress_callback между проходами позволяет Qt обработать сообщения.
-    Каждый проход ограничен timeout секундами.
     """
     r1 = _icp_with_timeout(
         pcd, mesh_pcd, dist1, init_T,
@@ -220,6 +273,10 @@ def _icp_two_pass(pcd, mesh_pcd, init_T, dist1, dist2, max_iter=150,
     return r2
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Главная функция
+# ──────────────────────────────────────────────────────────────────────────────
+
 def register_pipeline(pcd_full: o3d.geometry.PointCloud,
                        pcd_down: o3d.geometry.PointCloud,
                        mesh: o3d.geometry.TriangleMesh,
@@ -227,22 +284,18 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
                        progress_callback=None,
                        pcd_voxel_size: float = 0.0) -> tuple:
     """
-    Полный пайплайн регистрации с адаптивными параметрами.
+    Полный пайплайн регистрации с защитой от ложного 180°-минимума.
 
-    Параметры:
-        pcd_voxel_size — размер вокселя, использованный preprocessing для pcd_down.
-                         Если он близок к адаптивному (разница ≤ 20%) — pcd_down
-                         используется как есть, без повторного прореживания.
-
-    Возвращает: (pcd_registered, transformation, rmse)
+    Возвращает: (pcd_registered, transformation, rmse, registration_suspect)
+        pcd_registered      — зарегистрированное облако точек
+        transformation      — матрица 4×4 (из pcd_full_aligned в финальное положение)
+        rmse                — ICP inlier RMSE финального прохода
+        registration_suspect— True если C2M-RMSE победителя > reject_rmse_pct% bbox_diag
     """
 
     # ── Шаг 1: Адаптивные параметры ──────────────────────────────
     ap = _compute_adaptive_params(mesh)
 
-    # Используем уже прореженное pcd_down из preprocessing, если его
-    # voxel_size близок к адаптивному (разница ≤ 20%) — это устраняет
-    # двойную фильтрацию. Иначе пересчитываем от pcd_full.
     reg_voxel = ap["voxel_size"]
     reuse = (
         pcd_voxel_size > 0
@@ -270,18 +323,13 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
         progress_callback(35)
 
     # ── Шаг 2: Подготовка облаков (нормали + ориентация) ─────────
-    # progress_callback вызывается внутри _prepare_clouds между каждым облаком
-    # (35→45), давая Qt окна для обработки сообщений Windows
     mesh_pcd_full, mesh_pcd_down = _prepare_clouds(
         pcd_full, pcd_down_new, mesh, ap,
         progress_callback=progress_callback,
-        _prog_start=35, _prog_end=45
+        _prog_start=35, _prog_end=45,
     )
 
     # ── Шаг 3: Предвыравнивание по центрам масс ───────────────────
-    # Одна матрица сдвига — применяем к pcd_full и pcd_down_new.
-    # Центроиды pcd_full и pcd_down_new практически совпадают (voxel-down
-    # сохраняет распределение), так же как mesh_pcd_full ≈ mesh_pcd_down.
     c_pcd  = np.asarray(pcd_full.points).mean(axis=0)
     c_mesh = np.asarray(mesh_pcd_full.points).mean(axis=0)
     t = c_mesh - c_pcd
@@ -303,70 +351,117 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
     if progress_callback:
         progress_callback(52)
 
-    # ── Шаг 5: Мультистарт RANSAC ────────────────────────────────
+    # ── Шаг 5: Сборка пула гипотез ───────────────────────────────
     ransac_max_iter = config["registration"]["ransac_max_iter"]
     ransac_n_starts = config["registration"].get("ransac_n_starts", 5)
+    ransac_top_k    = config["registration"].get("ransac_top_k",   4)
+    use_pca_seeds   = config["registration"].get("use_pca_seeds",  True)
+
+    # BVH меша строится ОДИН раз — переиспользуется для всех кандидатов
+    mesh_t = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+    scene  = o3d.t.geometry.RaycastingScene()
+    scene.add_triangles(mesh_t)
+
+    # Базовая гипотеза: только центроидное смещение
+    hypotheses: list[np.ndarray] = [np.eye(4)]
+
+    # PCA-гипотезы: 4 знаковые комбинации главных осей
+    if use_pca_seeds:
+        pca_cands = pca_alignment_candidates(
+            np.asarray(pcd_down_aligned.points),
+            np.asarray(mesh_pcd_down.points),
+        )
+        hypotheses.extend(pca_cands)
+        logger.info(f"PCA: добавлено {len(pca_cands)} гипотез")
+
+    # Top-K RANSAC
     logger.info(
         f"Запуск RANSAC ({ransac_n_starts} попыток, "
-        f"до {ransac_max_iter} итераций каждая)..."
+        f"до {ransac_max_iter} итераций, top_k={ransac_top_k})..."
     )
-    # progress_callback вызывается между каждым запуском (52→65)
-    result_coarse = _ransac_multistart(
+    ransac_top = _ransac_multistart(
         pcd_down_aligned, mesh_pcd_down,
         fpfh_pcd, fpfh_mesh,
         ap["ransac_distance"],
         ransac_max_iter=ransac_max_iter,
         n_starts=ransac_n_starts,
+        top_k=ransac_top_k,
         progress_callback=progress_callback,
-        _prog_start=52, _prog_end=65
+        _prog_start=52, _prog_end=65,
     )
-    # progress_callback(65) уже вызван внутри _ransac_multistart
+    for r in ransac_top:
+        if r.fitness > 0.01:
+            hypotheses.append(r.transformation)
 
-    # ── Шаг 6: Проверка RANSAC, fallback если плохо ───────────────
-    if result_coarse.fitness < 0.01:
-        raise RegistrationError(
-            f"Не удалось совместить скан с моделью (fitness={result_coarse.fitness:.4f}). "
-            "Убедитесь, что загружены файлы одной и той же детали."
-        )
-    if result_coarse.fitness < 0.05:
-        logger.warning(
-            f"RANSAC провалился (fitness={result_coarse.fitness:.4f}). "
-            f"Используем только центроидное совмещение."
-        )
-        init_transform = np.eye(4)
-    else:
-        init_transform = result_coarse.transformation
+    logger.info(
+        f"Пул гипотез: {len(hypotheses)} "
+        f"(identity=1 + PCA={len(pca_cands) if use_pca_seeds else 0} "
+        f"+ RANSAC top-{len(ransac_top)})"
+    )
 
-    # ── Шаг 7: Двухпроходный ICP ─────────────────────────────────
-    # Переопределяем пороги ICP из конфига (если заданы) вместо адаптивных
+    if progress_callback:
+        progress_callback(65)
+
+    # ── Шаг 6: Выбор победителя по C2M-RMSE ─────────────────────
     coarse_pct = config["registration"].get("icp_coarse_pct", 5.0)
     fine_pct   = config["registration"].get("icp_fine_pct",   1.0)
     icp_dist1  = ap["bbox_diag"] * coarse_pct / 100.0
     icp_dist2  = ap["bbox_diag"] * fine_pct   / 100.0
 
+    best_c2m_rmse: float    = float("inf")
+    best_T:        np.ndarray = hypotheses[0]
+
+    for hi, T_h in enumerate(hypotheses):
+        try:
+            c2m, T_ref = _evaluate_candidate(
+                pcd_down_aligned, mesh_pcd_down, scene,
+                T_h, icp_dist=icp_dist1, max_iter=50,
+            )
+            logger.info(f"  Гипотеза {hi}: C2M-RMSE={c2m:.4f} мм")
+            if c2m < best_c2m_rmse:
+                best_c2m_rmse = c2m
+                best_T        = T_ref
+        except Exception as exc:
+            logger.warning(f"  Гипотеза {hi}: ошибка оценки — {exc}")
+
+    logger.info(f"Победитель: C2M-RMSE={best_c2m_rmse:.4f} мм")
+
+    if progress_callback:
+        progress_callback(68)
+
+    # ── Шаг 7: Валидационный шлюз ────────────────────────────────
+    reject_rmse_pct      = config["registration"].get("reject_rmse_pct", 5.0)
+    reject_thresh        = ap["bbox_diag"] * reject_rmse_pct / 100.0
+    registration_suspect = bool(best_c2m_rmse > reject_thresh)
+    if registration_suspect:
+        logger.warning(
+            f"SUSPECT REGISTRATION: C2M-RMSE победителя = {best_c2m_rmse:.4f} мм "
+            f"> порог {reject_thresh:.4f} мм "
+            f"({reject_rmse_pct}% от bbox_diag={ap['bbox_diag']:.1f} мм). "
+            "Проверьте соответствие скана и CAD-модели."
+        )
+
+    # ── Шаг 8: Финальный двухпроходный ICP (полное облако) ────────
     logger.info(
-        f"Запуск двухпроходного ICP: "
+        f"Финальный ICP от уточнённой матрицы победителя: "
         f"грубый={icp_dist1:.3f} мм ({coarse_pct}%), "
         f"точный={icp_dist2:.3f} мм ({fine_pct}%)..."
     )
-    # progress_callback(73) вызывается внутри _icp_two_pass между проходами,
-    # progress_callback(80) — после завершения обоих проходов
     result_fine = _icp_two_pass(
         pcd_full_aligned, mesh_pcd_full,
-        init_transform,
+        best_T,
         dist1=icp_dist1,
         dist2=icp_dist2,
         max_iter=config["registration"]["icp_max_iter"],
         timeout=60,
         progress_callback=progress_callback,
-        _prog_mid=73
+        _prog_mid=76,
     )
 
     if progress_callback:
         progress_callback(80)
 
-    # ── Шаг 8: Применяем финальную трансформацию ─────────────────
-    # pcd_full_aligned дальше не используется — трансформируем in-place.
+    # ── Шаг 9: Применяем финальную трансформацию ─────────────────
     pcd_registered = pcd_full_aligned.transform(result_fine.transformation)
 
     rmse = result_fine.inlier_rmse
@@ -378,4 +473,4 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
             f"({ap['bbox_diag']:.1f} мм). Возможно, регистрация неточна."
         )
 
-    return pcd_registered, result_fine.transformation, rmse
+    return pcd_registered, result_fine.transformation, rmse, registration_suspect

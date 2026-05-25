@@ -189,7 +189,7 @@ def _run_pipeline(pcd:    o3d.geometry.PointCloud,
     Возвращает (pcd_registered, T_estimated, icp_rmse).
     """
     pcd_clean, pcd_down, voxel_size = preprocess_pipeline(pcd, config)
-    pcd_reg, T_est, icp_rmse = register_pipeline(
+    pcd_reg, T_est, icp_rmse, _suspect = register_pipeline(
         pcd_clean, pcd_down, mesh, config,
         pcd_voxel_size=voxel_size,
     )
@@ -295,29 +295,15 @@ _FAIL_RMSE_PCT     = 0.05   # > 5% bbox_diag = явно неверная рег�
 _FAIL_ANGLE_DEG    = 90.0   # > 90° от правильной позы = перевёрнуто
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "known bug: одиночный RANSAC на Г-детали сходится в ложный 180°-минимум. "
-        "Ожидается ≥1 провал из 10. "
-        "После фикса (мультистарт + PCA-ориентация) → 0 провалов, снять @xfail."
-    ),
-)
 def test_false_minimum_Lshape():
     """
-    Тест-провокатор: документирует и измеряет баг ложного локального минимума.
+    Тест-провокатор: 0/10 провалов после фикса (PCA-гипотезы + выбор по C2M-RMSE).
 
     Сценарий:
       Скан Г-детали стартует из позы 180°-поворота вокруг Y-оси (относительно
-      центроида). Это именно та поза, в которую сваливается слабый RANSAC:
-      FPFH-дескрипторы плоских граней обеих «зеркальных» конфигураций почти
-      одинаковы, поэтому единственный RANSAC-старт с 20 тыс. итераций регулярно
-      принимает перевёрнутое положение за правильное. После этого ICP
-      застревает в ложном минимуме (часть точек согласована с плоскими гранями
-      длинной руки) и не может развернуться на 180°.
-
-    На ТЕКУЩЕМ коде: ожидается ≥1 из 10 попыток с RMSE > 5% bbox_diag → XFAIL.
-    После фикса: 0/10 провалов → тест станет XPASS / убрать @xfail.
+      центроида). Раньше слабый RANSAC сваливался в ложный минимум.
+      После фикса: PCA-кандидат правильной ориентации всегда попадает в пул,
+      C2M-RMSE выбирает его победителем → 0 провалов из 10.
     """
     np.random.seed(0)
 
@@ -352,7 +338,7 @@ def test_false_minimum_Lshape():
 
     print(f"\n[D provocation]  bbox_diag={bbox_diag:.1f} мм  "
           f"fail_thresh={fail_thresh:.1f} мм  N={_N_RUNS}")
-    print(f"  config: RANSAC n_starts=1, max_iter=20 000  (в 10x слабее)")
+    print(f"  config: RANSAC n_starts=1, max_iter=20 000 (слабый) + PCA-гипотезы (фикс)")
 
     for i in range(_N_RUNS):
         try:
@@ -380,17 +366,56 @@ def test_false_minimum_Lshape():
     mean_r = float(np.mean(finite_rmse)) if finite_rmse else float("inf")
     std_r  = float(np.std(finite_rmse))  if finite_rmse else 0.0
 
-    print(f"\n  BUG REPRODUCED: {failures}/{_N_RUNS} провалов")
-    print(f"  C2M RMSE: среднее={mean_r:.2f} ± {std_r:.2f} мм  "
-          f"(bbox_diag={bbox_diag:.1f} мм, порог={fail_thresh:.1f} мм)")
-    print(f"  pose_angle: среднее={float(np.mean(angle_log)):.1f}°")
-    print(f"  После фикса ожидается: 0/{_N_RUNS} провалов")
+    print(f"\n  failures: {failures}/{_N_RUNS}")
+    print(f"  C2M RMSE: среднее={mean_r:.2f} +- {std_r:.2f} mm  "
+          f"(bbox_diag={bbox_diag:.1f} mm, порог={fail_thresh:.1f} mm)")
+    print(f"  pose_angle: среднее={float(np.mean(angle_log)):.1f} deg")
 
-    # AssertionError → @pytest.mark.xfail срабатывает (XFAIL на текущем коде).
-    # После фикса failures == 0 → assert пройдёт → XPASS.
     assert failures == 0, (
-        f"BUG: {failures}/{_N_RUNS} запусков нашли ложный 180°-минимум "
-        f"(C2M RMSE > {fail_thresh:.1f} мм или pose_angle > {_FAIL_ANGLE_DEG}°)"
+        f"{failures}/{_N_RUNS} запусков нашли ложный 180-минимум "
+        f"(C2M RMSE > {fail_thresh:.1f} mm или pose_angle > {_FAIL_ANGLE_DEG} deg)"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# E. Стабильность на 5 seed-ах (метаморфный × 5)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_stability_5seeds():
+    """
+    Тест C повторяется с 5 разными seed-ами выборки скана.
+    Все 5 должны пройти после фикса: пул гипотез детерминированно
+    покрывает правильную ориентацию независимо от случайности RANSAC.
+    """
+    mesh      = make_L_shape()
+    bbox_ext  = np.asarray(mesh.get_axis_aligned_bounding_box().get_extent())
+    bbox_diag = float(np.linalg.norm(bbox_ext))
+    eps       = bbox_diag * 1e-3
+
+    T_init   = make_transform(10.0, [0, 1, 0], [5.0, 0.0, 0.0])
+    T_gt_inv = np.linalg.inv(T_init)
+
+    failures = []
+    print(f"\n[E stability 5 seeds]  bbox_diag={bbox_diag:.1f} mm  eps={eps:.4f} mm")
+
+    for seed in range(5):
+        np.random.seed(seed)
+        pcd_gt   = sample_scan(mesh, 5_000, noise_std=0.0, seed=seed)
+        pcd_scan = apply_transform(pcd_gt, T_init[:3, :3], T_init[:3, 3])
+
+        pcd_reg, T_est, icp_rmse = _run_pipeline(pcd_scan, mesh, _NORMAL_CONFIG)
+        rmse      = final_c2m_rmse(mesh, pcd_reg)
+        angle_err, _ = pose_error(T_est, T_gt_inv)
+
+        passed = (rmse < eps) and (angle_err < 10.0)
+        marker = "PASS" if passed else "FAIL"
+        print(f"  seed={seed}: C2M RMSE={rmse:.6f} mm  angle={angle_err:.2f} deg  -> {marker}")
+
+        if not passed:
+            failures.append(seed)
+
+    assert len(failures) == 0, (
+        f"seed(s) {failures} failed: C2M RMSE >= {eps:.4f} mm or angle >= 10 deg"
     )
 
 
@@ -420,13 +445,21 @@ if __name__ == "__main__":
 
     print()
     print("=" * 70)
-    print(f"Тест D: Провокатор (ложный минимум, {_N_RUNS} запусков, BUGGY config)...")
+    print(f"Тест D: Провокатор (180-поворот, {_N_RUNS} запусков, BUGGY config + PCA)...")
     try:
         test_false_minimum_Lshape()
-        print("  ИТОГ: БАГ НЕ ВОСПРОИЗВЕДЁН (0 провалов) — "
-              "RANSAC случайно прошёл все попытки")
+        print("  ИТОГ: PASS (0 провалов)")
     except AssertionError as e:
-        print(f"  ИТОГ: БАГ ЗАФИКСИРОВАН  {e}")
+        print(f"  ИТОГ: FAIL  {e}")
+
+    print()
+    print("=" * 70)
+    print("Тест E: Стабильность на 5 seed-ах...")
+    try:
+        test_stability_5seeds()
+        print("  ИТОГ: PASS")
+    except AssertionError as e:
+        print(f"  ИТОГ: FAIL  {e}")
 
     print()
     print("=" * 70)
