@@ -59,6 +59,7 @@ class ProjectManager:
         self.pcd_colored:    Optional[o3d.geometry.PointCloud]    = None
         self.pcd_registered: Optional[o3d.geometry.PointCloud]    = None
         self.deviations:     Optional[np.ndarray]                 = None
+        self.ambiguous_mask: Optional[np.ndarray]                 = None
         self.transformation: Optional[np.ndarray]                 = None
         self.stats:          Optional[dict]                       = None
 
@@ -177,6 +178,7 @@ class ProjectManager:
         self.results        = results
         self.pcd_colored    = results.get("pcd_colored")
         self.deviations     = results.get("deviations")
+        self.ambiguous_mask = results.get("ambiguous_mask")
         self.stats          = results.get("stats")
         self.pcd_registered = results.get("pcd_registered")   # зарегистрированное облако
         self.transformation = results.get("transform")        # матрица 4×4
@@ -216,6 +218,8 @@ class ProjectManager:
                 arrays["transformation"] = self.transformation
             if self.pcd_registered is not None:
                 arrays["pcd_points"] = np.asarray(self.pcd_registered.points)
+            if self.ambiguous_mask is not None:
+                arrays["ambiguous_mask"] = self.ambiguous_mask
             np.savez_compressed(npz_path, **arrays)
             logger.info(f"NPZ сайдкар сохранён: {npz_path}")
 
@@ -301,6 +305,7 @@ class ProjectManager:
         self.pcd_colored    = None
         self.pcd_registered = None
         self.deviations     = None
+        self.ambiguous_mask = None
         self.transformation = None
         self.stats          = None
         self.analysis_date  = None

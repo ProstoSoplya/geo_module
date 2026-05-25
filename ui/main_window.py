@@ -600,22 +600,34 @@ class MainWindow(QMainWindow):
                 pcd_reg = None
 
             if pcd_reg is not None:
-                pcd_colored = colorize_point_cloud(pcd_reg, deviations, tolerance, colormap)
+                # Восстанавливаем ambiguous_mask из NPZ (если есть)
+                ambiguous_mask = npz.get("ambiguous_mask")
+                if ambiguous_mask is not None:
+                    ambiguous_mask = ambiguous_mask.astype(bool)
+
+                pcd_colored = colorize_point_cloud(
+                    pcd_reg, deviations, tolerance, colormap,
+                    ambiguous_mask=ambiguous_mask,
+                )
 
                 # Пересчитываем статистику с текущим допуском
-                new_stats = compute_statistics(deviations, tolerance)
+                new_stats = compute_statistics(
+                    deviations, tolerance, ambiguous_mask=ambiguous_mask
+                )
                 new_stats["registration_rmse"] = saved_stats.get("registration_rmse", 0)
                 new_stats["dimensions"] = compute_dimensions(self.manager.mesh, pcd_reg)
 
                 self.manager.deviations     = deviations
+                self.manager.ambiguous_mask = ambiguous_mask
                 self.manager.transformation = npz.get("transformation")
                 self.manager.pcd_colored    = pcd_colored
                 self.manager.pcd_registered = pcd_reg
                 self.manager.stats          = new_stats
                 self.manager.results        = {
-                    "stats":       new_stats,
-                    "pcd_colored": pcd_colored,
-                    "deviations":  deviations,
+                    "stats":          new_stats,
+                    "pcd_colored":    pcd_colored,
+                    "deviations":     deviations,
+                    "ambiguous_mask": ambiguous_mask,
                 }
                 self.manager.analysis_date = project.get("analysis_date")
 
@@ -695,13 +707,18 @@ class MainWindow(QMainWindow):
         tolerance = self.config["analysis"]["tolerance_mm"]
         colormap  = self.config.get("ui", {}).get("colormap", "RdYlGn_r")
 
-        new_stats = compute_statistics(self.manager.deviations, tolerance)
-        # registration_rmse вычисляется один раз при полном анализе — сохраняем его
+        amb_mask = self.manager.ambiguous_mask   # сохранённая маска — не пересчитываем
+
+        new_stats = compute_statistics(
+            self.manager.deviations, tolerance, ambiguous_mask=amb_mask
+        )
+        # registration_rmse и dims вычисляются один раз при полном анализе — сохраняем
         new_stats["registration_rmse"] = self.manager.stats.get("registration_rmse", 0)
-        new_stats["dimensions"] = self.manager.stats.get("dimensions")
+        new_stats["dimensions"]        = self.manager.stats.get("dimensions")
 
         new_pcd = colorize_point_cloud(
-            self.manager.pcd_colored, self.manager.deviations, tolerance, colormap
+            self.manager.pcd_colored, self.manager.deviations, tolerance, colormap,
+            ambiguous_mask=amb_mask,
         )
 
         self.manager.pcd_colored = new_pcd

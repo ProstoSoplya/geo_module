@@ -160,7 +160,7 @@ class AnalysisWorker(QThread):
                 "Знак отклонения восстановлен по нормали ближайшей грани."
             )
 
-        deviations = compute_deviations(
+        deviations, ambiguous_mask = compute_deviations(
             pcd_registered,
             self.mesh,
             progress_callback=self._emit_progress
@@ -171,7 +171,7 @@ class AnalysisWorker(QThread):
         self._emit_stage("Этап 4/4: Формирование результатов...")
         self._log("④ Вычисление статистики...")
         tolerance = self.config["analysis"]["tolerance_mm"]
-        stats = compute_statistics(deviations, tolerance)
+        stats = compute_statistics(deviations, tolerance, ambiguous_mask=ambiguous_mask)
         stats["registration_rmse"] = reg_rmse
         dims = compute_dimensions(self.mesh, pcd_registered)
         stats["dimensions"] = dims
@@ -185,10 +185,24 @@ class AnalysisWorker(QThread):
                 f"{dims['scan'][2]:.1f} мм  (диаг. {dims['scan_diag']:.1f} мм)"
             )
 
+        amb_count = stats["ambiguous_sign_count"]
+        if amb_count > 0:
+            amb_pct   = stats["ambiguous_sign_pct"] * 100
+            zone_label = (
+                "зоны тонких стенок / срединная поверхность"
+                if self.mesh.is_watertight()
+                else "точки у рёбер/кромок"
+            )
+            self._log(
+                f"   Неоднозначный знак: {amb_count:,} точек "
+                f"({amb_pct:.1f}%) — {zone_label}"
+            )
+
         self._log("⑤ Раскраска облака точек по отклонениям...")
         colormap_name = self.config.get("ui", {}).get("colormap", "coolwarm")
         pcd_colored = colorize_point_cloud(
-            pcd_registered, deviations, tolerance, colormap_name=colormap_name
+            pcd_registered, deviations, tolerance,
+            colormap_name=colormap_name, ambiguous_mask=ambiguous_mask,
         )
 
         self._emit_progress(97)
@@ -205,6 +219,7 @@ class AnalysisWorker(QThread):
             "pcd_registered": pcd_registered,
             "pcd_colored":    pcd_colored,
             "deviations":     deviations,
+            "ambiguous_mask": ambiguous_mask,
             "stats":          stats,
             "transform":      transform,
         }
