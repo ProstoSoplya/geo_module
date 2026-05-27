@@ -249,6 +249,10 @@ def _icp_two_pass(pcd, mesh_pcd, init_T, dist1, dist2, max_iter=150,
     ICP двумя проходами от уточнённой матрицы победителя.
     Проход 1: большой порог → устраняет остаточные ошибки гипотезы.
     Проход 2: маленький порог → точная финальная доводка.
+
+    Возвращает (r1, r2) — оба результата нужны для диагностики поглощённого отклонения.
+    r1.transformation — трансформация после грубого прохода (T_coarse).
+    r2.transformation — трансформация после точного прохода  (T_fine).
     """
     r1 = _icp_with_timeout(
         pcd, mesh_pcd, dist1, init_T,
@@ -270,7 +274,7 @@ def _icp_two_pass(pcd, mesh_pcd, init_T, dist1, dist2, max_iter=150,
         timeout=timeout,
     )
     logger.info(f"ICP проход 2: rmse={r2.inlier_rmse:.6f}, fitness={r2.fitness:.4f}")
-    return r2
+    return r1, r2
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -447,7 +451,7 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
         f"грубый={icp_dist1:.3f} мм ({coarse_pct}%), "
         f"точный={icp_dist2:.3f} мм ({fine_pct}%)..."
     )
-    result_fine = _icp_two_pass(
+    r_coarse, r_fine = _icp_two_pass(
         pcd_full_aligned, mesh_pcd_full,
         best_T,
         dist1=icp_dist1,
@@ -461,16 +465,76 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
     if progress_callback:
         progress_callback(80)
 
-    # ── Шаг 9: Применяем финальную трансформацию ─────────────────
-    pcd_registered = pcd_full_aligned.transform(result_fine.transformation)
+    T_coarse = r_coarse.transformation
+    T_fine   = r_fine.transformation
 
-    rmse = result_fine.inlier_rmse
-    logger.info(f"Регистрация завершена: fitness={result_fine.fitness:.4f}, RMSE={rmse:.6f} мм")
+    # ── Шаг 9: Диагностика поглощённого отклонения ───────────────
+    # Движение точного прохода: T_delta = T_fine @ inv(T_coarse)
+    T_delta    = T_fine @ np.linalg.inv(T_coarse)
+    t_delta    = T_delta[:3, 3]
+    R_delta    = T_delta[:3, :3]
+    fine_pass_shift_mm = float(np.linalg.norm(t_delta))
+    cos_a = float(np.clip((np.trace(R_delta) - 1.0) / 2.0, -1.0, 1.0))
+    fine_pass_rot_deg  = float(np.degrees(np.arccos(cos_a)))
 
-    if rmse > ap["bbox_diag"] * 0.05:
+    # C2M-статистика при обоих выравниваниях — прореженное облако, уже готовая scene.
+    # Один проход: возвращает (rmse, within_tolerance_fraction) на downsampled cloud.
+    tolerance_mm = float(config.get("analysis", {}).get("tolerance_mm", 0.5))
+
+    def _c2m_stats_down(T: np.ndarray) -> tuple[float, float]:
+        pcd_tmp = copy.deepcopy(pcd_down_aligned).transform(T)
+        pts     = np.asarray(pcd_tmp.points).astype(np.float32)
+        query   = o3d.core.Tensor(pts, dtype=o3d.core.Dtype.Float32)
+        dists   = scene.compute_distance(query).numpy()
+        return (float(np.sqrt(np.mean(dists ** 2))),
+                float(np.mean(dists <= tolerance_mm)))
+
+    rmse_coarse,  within_tol_coarse  = _c2m_stats_down(T_coarse)
+    rmse_bestfit, within_tol_bestfit = _c2m_stats_down(T_fine)
+    absorbed             = rmse_coarse - rmse_bestfit
+    absorbed_within_tol  = within_tol_bestfit - within_tol_coarse   # в долях, м.б. < 0
+
+    logger.info(
+        f"Диагностика: сдвиг точного прохода={fine_pass_shift_mm:.4f} мм, "
+        f"поворот={fine_pass_rot_deg:.4f}°, "
+        f"rmse_coarse={rmse_coarse:.4f} мм, rmse_bestfit={rmse_bestfit:.4f} мм, "
+        f"absorbed_rmse={absorbed:.4f} мм, "
+        f"within_tol_coarse={within_tol_coarse*100:.1f}%, "
+        f"absorbed_within_tol={absorbed_within_tol*100:+.1f} п.п."
+    )
+
+    # ── Шаг 10: Выбор трансформации по режиму ─────────────────────
+    alignment_mode = config["registration"].get("alignment_mode", "best_fit")
+    if alignment_mode == "conservative":
+        T_selected = T_coarse
+        rmse_out   = r_coarse.inlier_rmse
+        logger.info("Режим conservative: возвращаем грубое выравнивание")
+    else:
+        T_selected = T_fine
+        rmse_out   = r_fine.inlier_rmse
+
+    pcd_registered = pcd_full_aligned.transform(T_selected)
+
+    logger.info(
+        f"Регистрация завершена (режим={alignment_mode}): "
+        f"fitness={r_fine.fitness:.4f}, RMSE={rmse_out:.6f} мм"
+    )
+    if rmse_out > ap["bbox_diag"] * 0.05:
         logger.warning(
-            f"RMSE ({rmse:.4f} мм) велик относительно размера модели "
+            f"RMSE ({rmse_out:.4f} мм) велик относительно размера модели "
             f"({ap['bbox_diag']:.1f} мм). Возможно, регистрация неточна."
         )
 
-    return pcd_registered, result_fine.transformation, rmse, registration_suspect
+    reg_diagnostics = {
+        "fine_pass_shift_mm":         fine_pass_shift_mm,
+        "fine_pass_rot_deg":          fine_pass_rot_deg,
+        "rmse_coarse":                rmse_coarse,
+        "rmse_bestfit":               rmse_bestfit,
+        "absorbed_deviation_mm":      absorbed,
+        "within_tolerance_coarse":    within_tol_coarse,
+        "within_tolerance_bestfit_down": within_tol_bestfit,
+        "absorbed_within_tol_pct":    absorbed_within_tol,
+        "alignment_mode":             alignment_mode,
+    }
+
+    return pcd_registered, T_selected, rmse_out, registration_suspect, reg_diagnostics

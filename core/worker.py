@@ -135,7 +135,7 @@ class AnalysisWorker(QThread):
         self._log("② Регистрация (совмещение скана с CAD-моделью)...")
         self._emit_progress(35)
 
-        pcd_registered, transform, reg_rmse, reg_suspect = register_pipeline(
+        pcd_registered, transform, reg_rmse, reg_suspect, reg_diag = register_pipeline(
             pcd_clean,
             pcd_down,
             self.mesh,
@@ -144,6 +144,21 @@ class AnalysisWorker(QThread):
             pcd_voxel_size=pcd_voxel_size,
         )
         self._log(f"   ICP завершён. RMSE совмещения: {reg_rmse:.6f} мм")
+
+        shift  = reg_diag["fine_pass_shift_mm"]
+        rot    = reg_diag["fine_pass_rot_deg"]
+        absorb = reg_diag["absorbed_deviation_mm"]
+        self._log(
+            f"   Точная регистрация сместила деталь на {shift:.4f} мм / {rot:.4f}°, "
+            f"разница C2M-RMSE: {absorb:+.4f} мм"
+        )
+        wtc          = reg_diag.get("within_tolerance_coarse", 0.0) * 100
+        abs_tol_pp   = reg_diag.get("absorbed_within_tol_pct",  0.0) * 100
+        wtbf         = wtc + abs_tol_pp
+        self._log(
+            f"   Точная регистрация повысила долю в допуске на {abs_tol_pp:+.1f} п.п. "
+            f"(с {wtc:.1f}% до {wtbf:.1f}%) — мера маскировки"
+        )
 
         if reg_suspect:
             self._log(
@@ -176,9 +191,16 @@ class AnalysisWorker(QThread):
         self._emit_stage("Этап 4/4: Формирование результатов...")
         self._log("④ Вычисление статистики...")
         tolerance = self.config["analysis"]["tolerance_mm"]
-        stats = compute_statistics(deviations, tolerance, ambiguous_mask=ambiguous_mask)
+        worst_n   = int(self.config.get("analysis", {}).get("worst_points_n", 10))
+        stats = compute_statistics(
+            deviations, tolerance,
+            ambiguous_mask=ambiguous_mask,
+            point_coords=np.asarray(pcd_registered.points),
+            worst_n=worst_n,
+        )
         stats["registration_rmse"]    = reg_rmse
         stats["registration_suspect"] = reg_suspect
+        stats.update(reg_diag)
         dims = compute_dimensions(self.mesh, pcd_registered)
         stats["dimensions"] = dims
         self._log(

@@ -131,6 +131,8 @@ def compute_statistics(
     deviations: np.ndarray,
     tolerance: float,
     ambiguous_mask: np.ndarray | None = None,
+    point_coords: np.ndarray | None = None,
+    worst_n: int = 10,
 ) -> dict:
     """
     Вычисляет статистику по отклонениям.
@@ -139,14 +141,20 @@ def compute_statistics(
         deviations     — знаковые отклонения (float64 ndarray)
         tolerance      — допуск в мм
         ambiguous_mask — булева маска точек с неоднозначным знаком (необязательна)
+        point_coords   — координаты (N×3), если переданы — заполняется worst_points
+        worst_n        — число точек с максимальным |отклонением| для worst_points
 
-    Добавляет в stats (не влияет на вердикт/within_tolerance):
-        ambiguous_sign_count — абсолютное число таких точек
-        ambiguous_sign_pct   — их доля (0.0–1.0)
+    Новые поля (не меняют логику вердикта):
+        over_material_pct  — доля точек с dev > +tolerance (избыток материала)
+        under_material_pct — доля точек с dev < -tolerance (недостаток материала)
+        worst_points       — список из worst_n точек с наибольшим |dev| (если point_coords задан)
     """
     abs_dev   = np.abs(deviations)
     within_tol= np.sum(abs_dev <= tolerance) / len(deviations)
     n         = int(len(deviations))
+
+    n_over  = int(np.sum(deviations >  tolerance))
+    n_under = int(np.sum(deviations < -tolerance))
 
     stats = {
         "mean_deviation":    float(np.mean(deviations)),
@@ -159,6 +167,8 @@ def compute_statistics(
         "percentile_95":     float(np.percentile(abs_dev, 95)),
         "percentile_99":     float(np.percentile(abs_dev, 99)),
         "within_tolerance":  float(within_tol),
+        "over_material_pct": float(n_over  / n) if n > 0 else 0.0,
+        "under_material_pct":float(n_under / n) if n > 0 else 0.0,
         "n_points":          n,
         "tolerance":         float(tolerance),
     }
@@ -167,11 +177,24 @@ def compute_statistics(
     stats["ambiguous_sign_count"] = amb_count
     stats["ambiguous_sign_pct"]   = float(amb_count / n) if n > 0 else 0.0
 
+    if point_coords is not None and len(point_coords) == n:
+        worst_idx = np.argsort(abs_dev)[::-1][:worst_n]
+        stats["worst_points"] = [
+            {
+                "x":   float(point_coords[i, 0]),
+                "y":   float(point_coords[i, 1]),
+                "z":   float(point_coords[i, 2]),
+                "dev": float(deviations[i]),
+            }
+            for i in worst_idx
+        ]
+
     logger.info(
         f"Статистика: среднее={stats['mean_deviation']:.4f}, "
         f"RMSE={stats['rmse']:.4f}, "
         f"макс|отклонение|={stats['max_abs_deviation']:.4f}, "
         f"в допуске={stats['within_tolerance']*100:.1f}%, "
+        f"избыток={n_over}, недостаток={n_under}, "
         f"неоднозначный знак={amb_count}"
     )
 

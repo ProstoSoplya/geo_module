@@ -314,10 +314,12 @@ def load_config(path: str = "config.json") -> dict:
             "icp_max_iter":     150,
             "use_pca_seeds":    True,
             "reject_rmse_pct":  5.0,
+            "alignment_mode":   "best_fit",
         },
         "analysis": {
             "tolerance_mm": 0.5,
-            "conformance_threshold": 95
+            "conformance_threshold": 95,
+            "worst_points_n": 10,
         },
         "ui": {
             "advanced_mode": False,

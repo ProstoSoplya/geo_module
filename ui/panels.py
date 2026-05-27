@@ -32,6 +32,12 @@ _UNIT_ITEMS = [
     ("как есть","as_is"),
 ]
 
+# (label, config_key) для режима выравнивания
+_ALIGNMENT_ITEMS = [
+    ("Наилучшее вписывание", "best_fit"),
+    ("Консервативный",       "conservative"),
+]
+
 
 class _ArrowOnHoverFilter(QObject):
     """Показывает стрелку при наведении на кнопку, когда активен глобальный WaitCursor."""
@@ -91,6 +97,9 @@ class ControlPanel(QWidget):
 
         # ── Группа единиц — всегда видима (вне скролла) ──────────
         outer.addWidget(self._build_units_group())
+
+        # ── Режим выравнивания — всегда виден ─────────────────────
+        outer.addWidget(self._build_alignment_group())
 
         sep2 = QFrame()
         sep2.setFrameShape(QFrame.Shape.HLine)
@@ -311,6 +320,52 @@ class ControlPanel(QWidget):
 
         return group
 
+    def _build_alignment_group(self) -> QWidget:
+        """Группа «Режим выравнивания» — всегда видима."""
+        reg  = self.config.get("registration", {})
+        mode = reg.get("alignment_mode", "best_fit")
+
+        group = QGroupBox("Режим выравнивания")
+        gl = QVBoxLayout(group)
+        gl.setContentsMargins(6, 4, 6, 6)
+        gl.setSpacing(4)
+
+        hint = QLabel(
+            "Наилучшее вписывание: меньше RMSE,\n"
+            "но ICP может скрыть реальное отклонение.\n"
+            "Консервативный: только грубое совмещение."
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #909090; font-size: 10px;")
+        gl.addWidget(hint)
+
+        self._alignment_combo = QComboBox()
+        for label, key in _ALIGNMENT_ITEMS:
+            self._alignment_combo.addItem(label, key)
+        for i in range(self._alignment_combo.count()):
+            if self._alignment_combo.itemData(i) == mode:
+                self._alignment_combo.setCurrentIndex(i)
+                break
+        self._alignment_combo.setToolTip(hint.text())
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        lbl = QLabel("Режим:")
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        row.addWidget(lbl)
+        row.addWidget(self._alignment_combo)
+        gl.addLayout(row)
+
+        self._alignment_combo.currentIndexChanged.connect(self._on_alignment_changed)
+        return group
+
+    def _on_alignment_changed(self):
+        if not self._updating:
+            self.param_changed.emit(
+                ["registration", "alignment_mode"],
+                self._alignment_combo.currentData()
+            )
+
     @staticmethod
     def _set_unit_combo(combo: QComboBox, key: str):
         """Устанавливает комбобокс по ключу единицы ("mm", "cm", …)."""
@@ -515,6 +570,12 @@ class ControlPanel(QWidget):
             units = config.get("units", {})
             self._set_unit_combo(self._cad_unit_combo,  units.get("cad"))
             self._set_unit_combo(self._scan_unit_combo, units.get("scan"))
+
+            align_mode = reg.get("alignment_mode", "best_fit")
+            for i in range(self._alignment_combo.count()):
+                if self._alignment_combo.itemData(i) == align_mode:
+                    self._alignment_combo.setCurrentIndex(i)
+                    break
         finally:
             self._updating = False
 
@@ -556,11 +617,13 @@ class ResultsPanel(QWidget):
         layout.addWidget(line)
 
         metrics = [
-            ("mean_deviation",    "Среднее отклонение", "мм"),
-            ("registration_rmse", "RMSE",               "мм"),
-            ("min_deviation",     "Мин. отклонение",    "мм"),
-            ("max_deviation",     "Макс. отклонение",   "мм"),
-            ("within_tolerance",  "Доля в допуске",     "%"),
+            ("mean_deviation",    "Среднее отклонение",     "мм"),
+            ("registration_rmse", "RMSE",                   "мм"),
+            ("min_deviation",     "Мин. отклонение",        "мм"),
+            ("max_deviation",     "Макс. отклонение",       "мм"),
+            ("within_tolerance",  "Доля в допуске",         "%"),
+            ("over_material_pct", "Избыток материала",      "%"),
+            ("under_material_pct","Недостаток материала",   "%"),
         ]
 
         for key, name, unit in metrics:
@@ -618,16 +681,57 @@ class ResultsPanel(QWidget):
             setattr(self, attr, val_lbl)
         layout.addWidget(dim_group)
 
+        layout.addSpacing(4)
+        diag_group = QGroupBox("Диагностика регистрации")
+        diag_group.setToolTip(
+            "Насколько точный ICP-проход переместил деталь\n"
+            "и сколько кажущегося отклонения он поглотил."
+        )
+        dg2 = QVBoxLayout(diag_group)
+        dg2.setContentsMargins(6, 4, 6, 4)
+        dg2.setSpacing(2)
+        _diag_fields = [
+            ("_diag_shift",       "Смещение точн. прохода:",  "мм"),
+            ("_diag_rot",         "Поворот точн. прохода:",   "°"),
+            ("_diag_coarse",      "RMSE до точного ICP:",     "мм"),
+            ("_diag_bestfit",     "RMSE после точного ICP:",  "мм"),
+            ("_diag_absorb",      "Разница C2M-RMSE:",        "мм"),
+            ("_diag_coarse_tol",  "Доля в допуске (грубая):", "%"),
+            ("_diag_absorb_tol",  "Маскировка доли:",         "п.п."),
+            ("_diag_mode",        "Режим:",                   ""),
+        ]
+        for attr, lbl_text, unit_text in _diag_fields:
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(2, 1, 2, 1)
+            name_lbl = QLabel(lbl_text)
+            name_lbl.setStyleSheet("font-size: 10px;")
+            name_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            val_lbl = QLabel("—")
+            val_lbl.setFont(QFont("Courier New", 9))
+            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
+            unit_lbl = QLabel(unit_text)
+            unit_lbl.setMinimumWidth(18)
+            unit_lbl.setStyleSheet("font-size: 10px;")
+            rl.addWidget(name_lbl)
+            rl.addWidget(val_lbl, 1)
+            rl.addWidget(unit_lbl)
+            dg2.addWidget(row)
+            setattr(self, attr, val_lbl)
+        layout.addWidget(diag_group)
+
         layout.addStretch()
 
     def update_results(self, stats: dict):
         """Обновляет метрики после анализа."""
         format_map = {
-            "registration_rmse": lambda v: f"{v:.6f}",
-            "mean_deviation":    lambda v: f"{v:+.4f}",
-            "max_deviation":     lambda v: f"{v:+.4f}",
-            "min_deviation":     lambda v: f"{v:+.4f}",
-            "within_tolerance":  lambda v: f"{v*100:.1f}",
+            "registration_rmse":  lambda v: f"{v:.6f}",
+            "mean_deviation":     lambda v: f"{v:+.4f}",
+            "max_deviation":      lambda v: f"{v:+.4f}",
+            "min_deviation":      lambda v: f"{v:+.4f}",
+            "within_tolerance":   lambda v: f"{v*100:.1f}",
+            "over_material_pct":  lambda v: f"{v*100:.1f}",
+            "under_material_pct": lambda v: f"{v*100:.1f}",
         }
 
         for key, (label, _) in self._labels.items():
@@ -662,6 +766,28 @@ class ResultsPanel(QWidget):
             else:
                 self._dim_delta.setText("—")
 
+        _mode_labels = {"best_fit": "Наилучшее вписывание", "conservative": "Консервативный"}
+        self._diag_shift.setText(f"{stats['fine_pass_shift_mm']:.4f}"
+                                  if "fine_pass_shift_mm" in stats else "—")
+        self._diag_rot.setText(f"{stats['fine_pass_rot_deg']:.4f}"
+                                if "fine_pass_rot_deg" in stats else "—")
+        self._diag_coarse.setText(f"{stats['rmse_coarse']:.4f}"
+                                   if "rmse_coarse" in stats else "—")
+        self._diag_bestfit.setText(f"{stats['rmse_bestfit']:.4f}"
+                                    if "rmse_bestfit" in stats else "—")
+        self._diag_absorb.setText(f"{stats['absorbed_deviation_mm']:+.4f}"
+                                   if "absorbed_deviation_mm" in stats else "—")
+        self._diag_coarse_tol.setText(
+            f"{stats['within_tolerance_coarse']*100:.1f}"
+            if "within_tolerance_coarse" in stats else "—"
+        )
+        self._diag_absorb_tol.setText(
+            f"{stats['absorbed_within_tol_pct']*100:+.1f}"
+            if "absorbed_within_tol_pct" in stats else "—"
+        )
+        mode_key = stats.get("alignment_mode", "")
+        self._diag_mode.setText(_mode_labels.get(mode_key, mode_key) if mode_key else "—")
+
     def reset(self):
         for key, (label, _) in self._labels.items():
             label.setText("—")
@@ -670,6 +796,9 @@ class ResultsPanel(QWidget):
         self._dim_cad.setText("—")
         self._dim_scan.setText("—")
         self._dim_delta.setText("—")
+        for attr in ("_diag_shift", "_diag_rot", "_diag_coarse", "_diag_bestfit",
+                     "_diag_absorb", "_diag_coarse_tol", "_diag_absorb_tol", "_diag_mode"):
+            getattr(self, attr).setText("—")
 
 
 # ──────────────────────────────────────────────────────────────────

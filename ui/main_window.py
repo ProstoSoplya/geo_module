@@ -616,6 +616,12 @@ class MainWindow(QMainWindow):
                 )
                 new_stats["registration_rmse"] = saved_stats.get("registration_rmse", 0)
                 new_stats["dimensions"] = compute_dimensions(self.manager.mesh, pcd_reg)
+                for _k in ("registration_suspect", "fine_pass_shift_mm", "fine_pass_rot_deg",
+                           "rmse_coarse", "rmse_bestfit", "absorbed_deviation_mm", "alignment_mode",
+                           "within_tolerance_coarse", "within_tolerance_bestfit_down",
+                           "absorbed_within_tol_pct", "worst_points"):
+                    if _k in saved_stats:
+                        new_stats[_k] = saved_stats[_k]
 
                 self.manager.deviations     = deviations
                 self.manager.ambiguous_mask = ambiguous_mask
@@ -712,9 +718,17 @@ class MainWindow(QMainWindow):
         new_stats = compute_statistics(
             self.manager.deviations, tolerance, ambiguous_mask=amb_mask
         )
-        # registration_rmse и dims вычисляются один раз при полном анализе — сохраняем
-        new_stats["registration_rmse"] = self.manager.stats.get("registration_rmse", 0)
-        new_stats["dimensions"]        = self.manager.stats.get("dimensions")
+        # Поля из регистрации вычисляются один раз — сохраняем при пересчёте допуска
+        _reg_keys = (
+            "registration_rmse", "registration_suspect", "dimensions",
+            "fine_pass_shift_mm", "fine_pass_rot_deg",
+            "rmse_coarse", "rmse_bestfit", "absorbed_deviation_mm", "alignment_mode",
+            "within_tolerance_coarse", "within_tolerance_bestfit_down",
+            "absorbed_within_tol_pct", "worst_points",
+        )
+        for _k in _reg_keys:
+            if _k in self.manager.stats:
+                new_stats[_k] = self.manager.stats[_k]
 
         new_pcd = colorize_point_cloud(
             self.manager.pcd_colored, self.manager.deviations, tolerance, colormap,

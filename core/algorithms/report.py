@@ -82,16 +82,21 @@ def _create_histogram(deviations: np.ndarray, tolerance: float, out: str):
 
 def _create_colorbar(tolerance: float, colormap: str, out: str):
     plt.rcParams["font.family"] = "DejaVu Sans"
-    fig, ax = plt.subplots(figsize=(7, 0.75), dpi=110)
+    fig, ax = plt.subplots(figsize=(7, 1.0), dpi=110)
     gradient = np.linspace(-tolerance, tolerance, 256).reshape(1, -1)
     ax.imshow(gradient, aspect="auto", cmap=colormap,
               extent=[-tolerance, tolerance, 0, 1])
     ax.set_yticks([])
-    n_ticks = 5
-    ticks = np.linspace(-tolerance, tolerance, n_ticks)
+    ticks = [-tolerance, -tolerance / 2, 0.0, tolerance / 2, tolerance]
     ax.set_xticks(ticks)
-    ax.set_xticklabels([f"{v:+.3f}" for v in ticks], fontsize=9)
-    ax.set_xlabel("Отклонение, мм", fontsize=9)
+    labels = [f"{v:+.3f}" for v in ticks]
+    labels[2] = "0"
+    ax.set_xticklabels(labels, fontsize=9)
+    ax.set_xlabel(
+        f"Отклонение, мм   (−{tolerance:.3f} мм — недостаток материала, "
+        f"+{tolerance:.3f} мм — избыток;  точки вне диапазона → крайний цвет шкалы)",
+        fontsize=8,
+    )
     for spine in ax.spines.values():
         spine.set_visible(False)
     fig.tight_layout(pad=0.3)
@@ -224,14 +229,18 @@ def generate_report(
 
     # Таблица результатов
     story.append(Paragraph("Результаты измерений", h2_style))
+    over_pct  = stats.get("over_material_pct",  0.0) * 100
+    under_pct = stats.get("under_material_pct", 0.0) * 100
     result_rows = [
         [Paragraph("<b>Метрика</b>", body_style),
          Paragraph("<b>Значение</b>", body_style)],
-        ["Среднее отклонение",  f"{stats.get('mean_deviation', 0):+.4f} мм"],
-        ["RMSE",                f"{registration_rmse:.6f} мм"],
-        ["Мин. отклонение",     f"{stats.get('min_deviation', 0):+.4f} мм"],
-        ["Макс. отклонение",    f"{stats.get('max_deviation', 0):+.4f} мм"],
-        ["Доля в допуске",      f"{within_pct:.1f}%  из {n_points:,} точек"],
+        ["Среднее отклонение",                  f"{stats.get('mean_deviation', 0):+.4f} мм"],
+        ["RMSE",                                f"{registration_rmse:.6f} мм"],
+        ["Мин. отклонение",                     f"{stats.get('min_deviation', 0):+.4f} мм"],
+        ["Макс. отклонение",                    f"{stats.get('max_deviation', 0):+.4f} мм"],
+        ["Доля в допуске",                      f"{within_pct:.1f}%  из {n_points:,} точек"],
+        ["Избыток материала (> +допуск)",        f"{over_pct:.1f}%"],
+        ["Недостаток материала (< −допуск)", f"{under_pct:.1f}%"],
     ]
     res_table = Table(result_rows, colWidths=col_w)
     res_table.setStyle(TableStyle([
@@ -290,6 +299,76 @@ def generate_report(
         ]))
         story.append(dim_table)
         story.append(Spacer(1, 5 * mm))
+
+    # Диагностика регистрации
+    wtc    = stats.get("within_tolerance_coarse", 0.0) * 100
+    abs_pp = stats.get("absorbed_within_tol_pct",  0.0) * 100
+    wtbf   = wtc + abs_pp
+    _mode_labels = {"best_fit": "Наилучшее вписывание", "conservative": "Консервативный"}
+    if any(k in stats for k in ("fine_pass_shift_mm", "rmse_coarse")):
+        story.append(Paragraph("Диагностика регистрации", h2_style))
+        diag_rows = [
+            [Paragraph("<b>Параметр</b>", body_style),
+             Paragraph("<b>Значение</b>", body_style)],
+            ["Смещение точного прохода",
+             f"{stats.get('fine_pass_shift_mm', 0):.4f} мм"],
+            ["Поворот точного прохода",
+             f"{stats.get('fine_pass_rot_deg', 0):.4f}°"],
+            ["C2M-RMSE до точного ICP (грубое)",
+             f"{stats.get('rmse_coarse', 0):.4f} мм"],
+            ["C2M-RMSE после точного ICP (best-fit)",
+             f"{stats.get('rmse_bestfit', 0):.4f} мм"],
+            ["Разница C2M-RMSE (груб. − точн.)",
+             f"{stats.get('absorbed_deviation_mm', 0):+.4f} мм"],
+            ["Доля в допуске при грубом совмещении",
+             f"{wtc:.1f}%"],
+            ["Маскировка доли в допуске",
+             f"{abs_pp:+.1f} п.п.  (с {wtc:.1f}% до {wtbf:.1f}%)"],
+            ["Режим выравнивания",
+             _mode_labels.get(stats.get("alignment_mode", ""), stats.get("alignment_mode", "—"))],
+        ]
+        diag_table = Table(diag_rows, colWidths=col_w)
+        diag_table.setStyle(TableStyle([
+            ("FONTNAME",   (0, 0), (-1, -1), font_reg),
+            ("FONTNAME",   (0, 0), (-1,  0), font_bold),
+            ("FONTSIZE",   (0, 0), (-1, -1), 10),
+            ("BACKGROUND", (0, 0), (-1,  0), colors.HexColor("#37474F")),
+            ("TEXTCOLOR",  (0, 0), (-1,  0), colors.white),
+            ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.white, colors.HexColor("#F5F5F5")]),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(diag_table)
+        story.append(Spacer(1, 5 * mm))
+
+    # Технологическая интерпретация
+    story.append(Paragraph("Технологическая интерпретация", h2_style))
+    min_dev   = stats.get("min_deviation", 0.0)
+    max_abs   = stats.get("max_abs_deviation", 0.0)
+    interp_lines = []
+    if under_pct > 0:
+        interp_lines.append(
+            f"• Недостаток материала: {under_pct:.1f}% точек (dev &lt; −{tolerance:.3f} мм). "
+            f"Минимальное отклонение: {min_dev:+.4f} мм — риск брака при недостаточном припуске."
+        )
+    if over_pct > 0:
+        interp_lines.append(
+            f"• Избыток материала: {over_pct:.1f}% точек (dev &gt; +{tolerance:.3f} мм) — "
+            f"зоны остаточного припуска, могут быть доработаны."
+        )
+    interp_lines.append(
+        f"• Максимальное |отклонение|: {max_abs:.4f} мм."
+    )
+    if "absorbed_within_tol_pct" in stats and abs(abs_pp) > 0.5:
+        interp_lines.append(
+            f"• Внимание: точная регистрация (best-fit ICP) повысила долю в допуске на "
+            f"{abs_pp:+.1f} п.п. Реальная картина при фиксированном базировании (консервативный "
+            f"режим): {wtc:.1f}% в допуске."
+        )
+    story.append(Paragraph("<br/>".join(interp_lines), body_style))
+    story.append(Spacer(1, 4 * mm))
 
     # Заключение
     verdict_word = "СООТВЕТСТВУЕТ" if passed else "НЕ СООТВЕТСТВУЕТ"
@@ -367,7 +446,7 @@ def generate_report(
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         cbar_path = f.name
     _create_colorbar(tolerance, colormap, cbar_path)
-    story.append(Image(cbar_path, width=USABLE_W, height=22 * mm))
+    story.append(Image(cbar_path, width=USABLE_W, height=28 * mm))
 
     # ── Страница 3 — гистограмма ───────────────────────────────────────────────
 
@@ -379,6 +458,44 @@ def generate_report(
         hist_path = f.name
     _create_histogram(deviations, tolerance, hist_path)
     story.append(Image(hist_path, width=USABLE_W, height=USABLE_W * 0.46))
+
+    # Таблица худших точек
+    worst_pts = stats.get("worst_points")
+    if worst_pts:
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph("Точки с наибольшим отклонением", h2_style))
+        wp_rows = [
+            [Paragraph("<b>#</b>",       body_style),
+             Paragraph("<b>X, мм</b>",   body_style),
+             Paragraph("<b>Y, мм</b>",   body_style),
+             Paragraph("<b>Z, мм</b>",   body_style),
+             Paragraph("<b>Откл., мм</b>", body_style)],
+        ]
+        cw5_lbl = 12 * mm
+        cw5_val = (USABLE_W - cw5_lbl) / 4
+        for idx, pt in enumerate(worst_pts, 1):
+            wp_rows.append([
+                str(idx),
+                f"{pt['x']:+.3f}",
+                f"{pt['y']:+.3f}",
+                f"{pt['z']:+.3f}",
+                f"{pt['dev']:+.4f}",
+            ])
+        wp_table = Table(wp_rows, colWidths=[cw5_lbl, cw5_val, cw5_val, cw5_val, cw5_val])
+        wp_table.setStyle(TableStyle([
+            ("FONTNAME",   (0, 0), (-1, -1), font_reg),
+            ("FONTNAME",   (0, 0), (-1,  0), font_bold),
+            ("FONTSIZE",   (0, 0), (-1, -1), 9),
+            ("BACKGROUND", (0, 0), (-1,  0), colors.HexColor("#37474F")),
+            ("TEXTCOLOR",  (0, 0), (-1,  0), colors.white),
+            ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.white, colors.HexColor("#F5F5F5")]),
+            ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(wp_table)
 
     # ── Сборка документа ──────────────────────────────────────────────────────
     try:
