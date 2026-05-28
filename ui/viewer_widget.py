@@ -37,6 +37,24 @@ from PyQt6.QtCore import Qt, QTimer, QObject, QEvent
 
 logger = logging.getLogger(__name__)
 
+
+# ── VTK-стиль без ПКМ-Dolly ─────────────────────────────────────────────────
+
+class _TrackballNoDolly(vtk.vtkInteractorStyleTrackballCamera):
+    """Trackball-camera без обработки ПКМ.
+
+    Python-подкласс VTK *реально* переопределяет C++ виртуальные методы,
+    поэтому OnRightButtonDown/Up гарантированно не запустят Dolly —
+    в отличие от monkey-patch через присвоение атрибута на экземпляр.
+    """
+
+    def OnRightButtonDown(self):
+        pass
+
+    def OnRightButtonUp(self):
+        pass
+
+
 # ── Qt-фильтр: двойной клик ЛКМ → перецентрировать камеру ────────────────────
 
 class _ViewerInteractionFilter(QObject):
@@ -60,9 +78,7 @@ class _ViewerInteractionFilter(QObject):
     def __init__(self, plotter, parent=None):
         super().__init__(parent)
         self._plotter = plotter
-        self._panning = False
-        self._last_x = 0
-        self._last_y = 0
+        self._last_pos = None
 
     def eventFilter(self, obj, event):
         t = event.type()
@@ -72,80 +88,85 @@ class _ViewerInteractionFilter(QObject):
                 and event.button() == Qt.MouseButton.LeftButton):
             return self._recenter_at(event.position())
 
-        # ПКМ → старт pan (VTK не получит событие → не запустит dolly)
+        # ПКМ → старт pan: запоминаем ГЛОБАЛЬНУЮ позицию.
+        # globalPosition() — в экранных координатах, одинаковых для всех
+        # виджетов. Это исключает скачок дельты, если press и move
+        # приходят от разных виджетов (parent vs VTK-child).
         if (t == QEvent.Type.MouseButtonPress
                 and event.button() == Qt.MouseButton.RightButton):
-            self._panning = True
-            self._last_x = event.position().x()
-            self._last_y = event.position().y()
+            gp = event.globalPosition()
+            self._last_pos = (gp.x(), gp.y())
             return True
 
         # Движение во время pan → сдвинуть камеру
-        if t == QEvent.Type.MouseMove and self._panning:
-            x = event.position().x()
-            y = event.position().y()
-            self._pan_camera(x - self._last_x, y - self._last_y)
-            self._last_x = x
-            self._last_y = y
+        if t == QEvent.Type.MouseMove and self._last_pos is not None:
+            gp = event.globalPosition()
+            gx, gy = gp.x(), gp.y()
+            self._pan_camera(gx - self._last_pos[0], gy - self._last_pos[1])
+            self._last_pos = (gx, gy)
             return True
 
         # Отпустили ПКМ → конец pan
         if (t == QEvent.Type.MouseButtonRelease
-                and event.button() == Qt.MouseButton.RightButton
-                and self._panning):
-            self._panning = False
+                and event.button() == Qt.MouseButton.RightButton):
+            self._last_pos = None
             return True
 
         return False
 
-    def _pan_camera(self, dx_qt: float, dy_qt: float):
-        """Параллельный перенос камеры так, что мир под курсором следует
-        за курсором (стандартный VTK drag-to-pan).
-
-        Алгоритм:
-          1. Берём текущий focal F, проецируем в display.
-          2. Вычисляем display-координату точки, которая после переноса
-             должна оказаться на месте старого F: смещение в display
-             равно (-dx_qt, +dy_qt) — Qt y направлен вниз, VTK display y
-             вверх; знак минус, потому что мир «следует» за курсором.
-          3. Unproject этой display-точки на focal-плоскость → новая
-             позиция focal в мире.
-          4. Сдвигаем и focal, и position на одну дельту.
-        """
+    def _pan_camera(self, dx_px: float, dy_px: float):
+        """Параллельный перенос камеры так, что мир следует за курсором."""
         plotter = self._plotter
         renderer = getattr(plotter, "renderer", None)
-        camera   = getattr(plotter, "camera",   None)
-        if renderer is None or camera is None:
+        if renderer is None:
+            return
+        # Берём VTK-камеру напрямую, минуя property plotter.camera,
+        # который может вызвать reset_camera если camera.is_set == False.
+        camera = renderer.GetActiveCamera()
+        if camera is None:
             return
 
-        fp = np.array(camera.GetFocalPoint(), dtype=np.float64)
-        renderer.SetWorldPoint(fp[0], fp[1], fp[2], 1.0)
-        renderer.WorldToDisplay()
-        fpd = renderer.GetDisplayPoint()
+        fp  = np.array(camera.GetFocalPoint(), dtype=np.float64)
+        pos = np.array(camera.GetPosition(),   dtype=np.float64)
 
-        new_dx = fpd[0] - dx_qt
-        new_dy = fpd[1] + dy_qt
-        renderer.SetDisplayPoint(new_dx, new_dy, fpd[2])
-        renderer.DisplayToWorld()
-        w = renderer.GetWorldPoint()
-        if abs(w[3]) < 1e-12:
+        view = fp - pos
+        dist = np.linalg.norm(view)
+        if dist < 1e-12:
             return
-        new_fp = np.array([w[0]/w[3], w[1]/w[3], w[2]/w[3]],
-                          dtype=np.float64)
+        view_n = view / dist
 
-        delta = new_fp - fp
-        pos = np.array(camera.GetPosition(), dtype=np.float64)
-        camera.SetFocalPoint(*new_fp)
+        up = np.array(camera.GetViewUp(), dtype=np.float64)
+        right = np.cross(view_n, up)
+        rn = np.linalg.norm(right)
+        if rn < 1e-12:
+            return
+        right /= rn
+        up = np.cross(right, view_n)
+
+        h = plotter.height()
+        if h <= 0:
+            return
+
+        if camera.GetParallelProjection():
+            scale = 2.0 * camera.GetParallelScale() / h
+        else:
+            va = np.radians(camera.GetViewAngle())
+            scale = 2.0 * dist * np.tan(va * 0.5) / h
+
+        delta = (-dx_px * right + dy_px * up) * scale
+
+        camera.SetFocalPoint(*(fp + delta))
         camera.SetPosition(*(pos + delta))
-
         renderer.ResetCameraClippingRange()
         plotter.render()
 
     def _recenter_at(self, qpos) -> bool:
         plotter = self._plotter
         renderer = getattr(plotter, "renderer", None)
-        camera   = getattr(plotter, "camera",   None)
-        if renderer is None or camera is None:
+        if renderer is None:
+            return False
+        camera = renderer.GetActiveCamera()
+        if camera is None:
             return False
 
         widget_h = plotter.height()
@@ -269,23 +290,18 @@ class ViewerWidget(QWidget):
 
         self.plotter = QtInteractor(self)
         self.plotter.set_background(self._BG)
-        # Явно включаем стандартный VTK trackball-camera стиль:
-        #   ЛКМ = rotate, СКМ (зажать колесо) = pan, ПКМ = dolly, колесо = zoom.
-        # Без этого вызова QtInteractor может оказаться без интеракторного
-        # стиля вообще — тогда не работают ни pan, ни dolly.
-        self.plotter.enable_trackball_style()
-        # ВАЖНО: убираем VTK-обработчики ПКМ у активного стиля. Без этого первое
-        # нажатие ПКМ, попавшее в VTK до установки Qt-фильтра, запускает Dolly
-        # и резко смещает камеру вдоль вектора взгляда — пользователь видит
-        # «сброс/прыжок». Удаление обработчиков на самом VTK-стиле гарантирует,
-        # что ПКМ-Dolly не сработает ни в одном сценарии (Qt-фильтр выше — это
-        # реализация Pan, она кладётся параллельно).
+        # Ставим кастомный trackball-стиль БЕЗ обработки ПКМ.
+        # _TrackballNoDolly — Python-подкласс vtkInteractorStyleTrackballCamera
+        # с пустыми OnRightButtonDown/Up. Python-подкласс реально переопределяет
+        # C++ виртуальные методы, поэтому Dolly гарантированно не сработает.
+        # (monkey-patch через присвоение атрибута на C++ экземпляр не работает.)
         try:
-            iren_style = self.plotter.iren.interactor.GetInteractorStyle()
-            for evt_name in ("RightButtonPressEvent", "RightButtonReleaseEvent"):
-                iren_style.RemoveObservers(evt_name)
+            style = _TrackballNoDolly()
+            self.plotter.iren.interactor.SetInteractorStyle(style)
+            self._vtk_style = style  # prevent GC
         except Exception as exc:
-            logger.debug("Не удалось снять VTK-обработчики ПКМ: %s", exc)
+            logger.debug("Не удалось установить _TrackballNoDolly: %s", exc)
+            self.plotter.enable_trackball_style()
         self.plotter.setVisible(False)
         layout.addWidget(self.plotter, 1)
 
@@ -312,16 +328,25 @@ class ViewerWidget(QWidget):
         self._install_mouse_nav()
 
     def _install_mouse_nav(self):
-        """Ставит Qt event filter на QtInteractor (он же QVTKRenderWindowInteractor)."""
-        # self.plotter — это сам QVTKRenderWindowInteractor (QWidget).
-        # ВАЖНО: self.plotter.iren.interactor — это VTK-объект, а не QObject:
-        # installEventFilter на нём упадёт. Ставим строго на Qt-виджет.
-        self._interaction_filter = _ViewerInteractionFilter(self.plotter, self)
+        """Ставит Qt event filter на QtInteractor И все его дочерние виджеты.
+
+        VTK может создать внутренний OpenGL-виджет (QVTKOpenGLNativeWidget и т.п.)
+        как дочерний элемент QtInteractor ЛЕНИВО — при первом render(). Qt
+        доставляет мышиные события непосредственно тому виджету, который
+        находится под курсором — если это дочерний виджет, фильтр на родителе
+        не сработает. Поэтому:
+        - Ставим фильтр и на родитель, и на все QWidget-дочерние элементы.
+        - Метод идемпотентен: повторный вызов безопасно доставит фильтр на
+          виджеты, появившиеся после первого вызова (installEventFilter на
+          уже отфильтрованный объект — no-op в Qt).
+        """
+        if not hasattr(self, "_interaction_filter"):
+            self._interaction_filter = _ViewerInteractionFilter(
+                self.plotter, self,
+            )
         self.plotter.installEventFilter(self._interaction_filter)
-        logger.debug(
-            "ViewerInteractionFilter установлен на %s",
-            type(self.plotter).__name__,
-        )
+        for child in self.plotter.findChildren(QWidget):
+            child.installEventFilter(self._interaction_filter)
 
     def _build_toolbar(self) -> QWidget:
         bar = QWidget()
@@ -573,6 +598,9 @@ class ViewerWidget(QWidget):
 
         self.plotter.reset_camera()
         self.plotter.render()
+        # После render() VTK мог создать дочерний OpenGL-виджет,
+        # которого не было при _install_mouse_nav() в _setup_ui().
+        self._install_mouse_nav()
 
     # ── Режимы и камера ───────────────────────────────────────────────────────
 
