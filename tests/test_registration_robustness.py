@@ -189,7 +189,7 @@ def _run_pipeline(pcd:    o3d.geometry.PointCloud,
     Возвращает (pcd_registered, T_estimated, icp_rmse).
     """
     pcd_clean, pcd_down, voxel_size = preprocess_pipeline(pcd, config)
-    pcd_reg, T_est, icp_rmse, _suspect = register_pipeline(
+    pcd_reg, T_est, icp_rmse, _suspect, _reg_diag = register_pipeline(
         pcd_clean, pcd_down, mesh, config,
         pcd_voxel_size=voxel_size,
     )

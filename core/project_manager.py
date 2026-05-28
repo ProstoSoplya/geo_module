@@ -21,6 +21,8 @@ from typing import Optional
 import numpy as np
 import open3d as o3d
 
+from core.algorithms.deviation import compute_statistics
+
 logger = logging.getLogger(__name__)
 
 # Коэффициенты перевода единиц файла в миллиметры.
@@ -276,6 +278,34 @@ class ProjectManager:
         self.project_path     = path
         project["missing_files"] = missing_files
         project["npz_data"]      = npz_data
+
+        # Восстанавливаем worst_points, если они отсутствуют в JSON-статистике
+        saved_stats = project.get("stats")
+        if saved_stats is not None and not saved_stats.get("worst_points"):
+            if npz_data is not None and "deviations" in npz_data:
+                if "pcd_points" in npz_data:
+                    tolerance = self.config.get("analysis", {}).get("tolerance_mm", 1.0)
+                    worst_n = int(self.config.get("analysis", {}).get("worst_points_n", 10))
+                    ambiguous_mask = npz_data.get("ambiguous_mask")
+                    if ambiguous_mask is not None:
+                        ambiguous_mask = ambiguous_mask.astype(bool)
+                    tmp_stats = compute_statistics(
+                        npz_data["deviations"],
+                        tolerance,
+                        ambiguous_mask=ambiguous_mask,
+                        point_coords=npz_data["pcd_points"],
+                        worst_n=worst_n,
+                    )
+                    saved_stats["worst_points"] = tmp_stats.get("worst_points", [])
+                    logger.info(
+                        "worst_points восстановлены из данных проекта "
+                        f"({len(saved_stats['worst_points'])} точек)"
+                    )
+                else:
+                    saved_stats["worst_points"] = []
+                    logger.warning(
+                        "pcd_points отсутствует в NPZ — worst_points оставлены пустыми"
+                    )
 
         logger.info(f"Проект загружен: {path}")
         return project
