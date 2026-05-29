@@ -2,8 +2,8 @@
 panels.py — Боковые панели пользовательского интерфейса.
 
 ControlPanel — панель настройки параметров с двумя режимами:
-    Простой:    только поле допуска, все параметры — из config по умолчанию.
-    Расширенный: все группы параметров с tooltips.
+    Базовый:     единицы, допуск, порог соответствия.
+    Расширенный: + предобработка, регистрация, выравнивание.
 ResultsPanel — панель с числовыми результатами анализа.
 LogPanel     — панель лога (сообщения о ходе работы).
 """
@@ -13,7 +13,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QDoubleSpinBox, QSpinBox, QCheckBox, QComboBox, QPushButton,
-    QGroupBox, QTextEdit, QSizePolicy, QFrame, QScrollArea, QFileDialog,
+    QGroupBox, QTextEdit, QSizePolicy, QFrame, QFileDialog,
     QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QEvent
@@ -21,15 +21,12 @@ from PyQt6.QtGui import QTextCursor, QFont
 
 logger = logging.getLogger(__name__)
 
-_COLORMAPS = ["coolwarm", "RdYlGn_r", "jet"]
-
 # (label, config_key) для комбобоксов единиц измерения
 _UNIT_ITEMS = [
     ("мм",      "mm"),
     ("см",      "cm"),
     ("м",       "m"),
     ("дюйм",    "in"),
-    ("как есть","as_is"),
 ]
 
 # (label, config_key) для режима выравнивания
@@ -57,8 +54,8 @@ class ControlPanel(QWidget):
     Панель настройки параметров алгоритмов.
 
     Два режима:
-        Простой     — только допуск, остальное из config.
-        Расширенный — все параметры в трёх группах.
+        Базовый:      единицы, допуск, порог соответствия.
+        Расширенный:  + предобработка, регистрация, режим выравнивания.
 
     Сигналы:
         param_changed(list, object) — при изменении любого параметра.
@@ -87,7 +84,7 @@ class ControlPanel(QWidget):
         self._adv_check = QCheckBox("Расширенный режим")
         self._adv_check.setToolTip(
             "Показать все параметры алгоритмов.\n"
-            "В простом режиме используются значения из конфига по умолчанию."
+            "В базовом режиме используются значения из конфига по умолчанию."
         )
         outer.addWidget(self._adv_check)
 
@@ -95,86 +92,60 @@ class ControlPanel(QWidget):
         sep.setFrameShape(QFrame.Shape.HLine)
         outer.addWidget(sep)
 
-        # ── Группа единиц — всегда видима (вне скролла) ──────────
+        # ── Единицы — всегда видимы ──────────────────────────────
         outer.addWidget(self._build_units_group())
 
-        # ── Режим выравнивания — всегда виден ─────────────────────
-        outer.addWidget(self._build_alignment_group())
+        # ── Допуск и порог — всегда видимы ───────────────────────
+        outer.addWidget(self._build_tolerance_group())
 
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.Shape.HLine)
-        outer.addWidget(sep2)
+        # ── Расширенные параметры (без внутреннего scroll) ────────
+        self._adv_sep = QFrame()
+        self._adv_sep.setFrameShape(QFrame.Shape.HLine)
+        outer.addWidget(self._adv_sep)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._build_advanced_groups()
+        outer.addWidget(self._preprocess_group)
+        outer.addWidget(self._registration_group)
+        outer.addWidget(self._alignment_group)
 
-        content = QWidget()
-        self._content_layout = QVBoxLayout(content)
-        self._content_layout.setContentsMargins(2, 2, 2, 2)
-        self._content_layout.setSpacing(8)
-        scroll.setWidget(content)
-        outer.addWidget(scroll)
-
-        tol_val = float(self.config.get("analysis", {}).get("tolerance_mm", 0.5))
-        thr_val = int(self.config.get("analysis", {}).get("conformance_threshold", 95))
-
-        self._simple_widget = self._build_simple(tol_val, thr_val)
-        self._content_layout.addWidget(self._simple_widget)
-
-        self._advanced_widget = self._build_advanced(tol_val, thr_val)
-        self._content_layout.addWidget(self._advanced_widget)
-
-        self._content_layout.addStretch()
+        outer.addStretch()
 
         advanced = bool(self.config.get("ui", {}).get("advanced_mode", False))
         self._adv_check.setChecked(advanced)
         self._apply_mode(advanced)
         self._adv_check.toggled.connect(self._on_mode_changed)
 
-    def _build_simple(self, tol_val: float, thr_val: int) -> QWidget:
-        """Виджет простого режима: подсказка + поле допуска + порог соответствия."""
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(0, 0, 0, 0)
+    def _build_tolerance_group(self) -> QGroupBox:
+        """Допуск ± и порог соответствия — всегда видимы в обоих режимах."""
+        group = QGroupBox("Параметры анализа")
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(6, 4, 6, 6)
         layout.setSpacing(6)
 
-        hint = QLabel(
-            "Параметры алгоритмов подобраны\n"
-            "автоматически. Задайте допуск:"
-        )
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: #c0c0c0; font-size: 11px;")
-        layout.addWidget(hint)
+        tol_val = float(self.config.get("analysis", {}).get("tolerance_mm", 0.5))
+        thr_val = int(self.config.get("analysis", {}).get("conformance_threshold", 95))
 
-        self._simple_tol = self._make_double_spin(tol_val, 0.001, 50.0, 0.05, 3, "Допуск в мм")
-        self._simple_tol.valueChanged.connect(self._on_simple_tol_changed)
-        layout.addLayout(self._tol_row("Допуск ±(мм):", self._simple_tol))
+        self._tol_spin = self._make_double_spin(tol_val, 0.001, 50.0, 0.05, 3, "Допуск в мм")
+        self._tol_spin.valueChanged.connect(self._on_tol_changed)
+        layout.addLayout(self._tol_row("Допуск ±(мм):", self._tol_spin))
 
-        self._simple_thr = self._make_int_spin(
+        self._thr_spin = self._make_int_spin(
             thr_val, 80, 100, 1,
             "Минимальная доля точек в допуске для соответствия"
         )
-        self._simple_thr.valueChanged.connect(self._on_simple_thr_changed)
-        layout.addLayout(self._tol_row("Порог соответствия (%):", self._simple_thr))
+        self._thr_spin.valueChanged.connect(self._on_thr_changed)
+        layout.addLayout(self._tol_row("Порог соответствия (%):", self._thr_spin))
 
-        return w
+        return group
 
-    def _build_advanced(self, tol_val: float, thr_val: int) -> QWidget:
-        """Виджет расширенного режима: все группы параметров."""
-        w = QWidget()
-        layout = QVBoxLayout(w)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-
+    def _build_advanced_groups(self):
+        """Создаёт три группы расширенных параметров как атрибуты экземпляра."""
         pre = self.config.get("preprocessing", {})
         reg = self.config.get("registration",  {})
-        ui  = self.config.get("ui", {})
 
         # ── Предобработка ──────────────────────────────────────────
-        pre_group = QGroupBox("Предобработка")
-        pg = QVBoxLayout(pre_group)
+        self._preprocess_group = QGroupBox("Предобработка")
+        pg = QVBoxLayout(self._preprocess_group)
 
         voxel_val = pre.get("voxel_size", 0)
         try:
@@ -206,11 +177,10 @@ class ControlPanel(QWidget):
         self._sor_std_spin.valueChanged.connect(
             lambda v: self.param_changed.emit(["preprocessing", "sor_std_ratio"], round(v, 4))
         )
-        layout.addWidget(pre_group)
 
         # ── Регистрация ────────────────────────────────────────────
-        reg_group = QGroupBox("Регистрация")
-        rg = QVBoxLayout(reg_group)
+        self._registration_group = QGroupBox("Регистрация")
+        rg = QVBoxLayout(self._registration_group)
 
         self._ransac_n_spin = self._make_int_spin(
             int(reg.get("ransac_n_starts", 5)), 1, 20, 1,
@@ -240,55 +210,48 @@ class ControlPanel(QWidget):
         )
 
         self._icp_iter_spin = self._make_int_spin(
-            int(reg["icp_max_iter"]), 10, 200, 10,
+            int(reg.get("icp_max_iter", 50)), 10, 200, 10,
             "Предел итераций"
         )
         rg.addLayout(self._spin_row("Итераций ICP:", self._icp_iter_spin))
         self._icp_iter_spin.valueChanged.connect(
             lambda v: self.param_changed.emit(["registration", "icp_max_iter"], v)
         )
-        layout.addWidget(reg_group)
 
-        # ── Расчёт отклонений ──────────────────────────────────────
-        dev_group = QGroupBox("Расчёт отклонений")
-        dg = QVBoxLayout(dev_group)
+        # ── Режим выравнивания ─────────────────────────────────────
+        self._alignment_group = QGroupBox("Режим выравнивания")
+        ag = QVBoxLayout(self._alignment_group)
+        ag.setContentsMargins(6, 4, 6, 6)
+        ag.setSpacing(4)
 
-        self._adv_tol_spin = self._make_double_spin(tol_val, 0.001, 50.0, 0.05, 3, "Допуск в мм")
-        self._adv_tol_spin.valueChanged.connect(self._on_adv_tol_changed)
-        dg.addLayout(self._tol_row("Допуск ±(мм):", self._adv_tol_spin))
-
-        self._adv_thr_spin = self._make_int_spin(
-            thr_val, 80, 100, 1,
-            "Минимальная доля точек в допуске для соответствия"
+        hint = QLabel(
+            "Наилучшее вписывание: меньше RMSE,\n"
+            "но ICP может скрыть реальное отклонение.\n"
+            "Консервативный: только грубое совмещение."
         )
-        self._adv_thr_spin.valueChanged.connect(self._on_adv_thr_changed)
-        dg.addLayout(self._tol_row("Порог соответствия (%):", self._adv_thr_spin))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #909090; font-size: 10px;")
+        ag.addWidget(hint)
 
-        cm_row = QHBoxLayout()
-        cm_label = QLabel("Цветовая шкала:")
-        cm_label.setToolTip(
-            "Палитра раскраски облака точек по отклонениям:\n"
-            "coolwarm   — синий → белый → красный\n"
-            "RdYlGn_r   — красный → жёлтый → зелёный\n"
-            "jet        — синий → зелёный → красный"
-        )
-        cm_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        self._colormap_combo = QComboBox()
-        self._colormap_combo.addItems(_COLORMAPS)
-        self._colormap_combo.setFixedWidth(110)
-        self._colormap_combo.setToolTip(cm_label.toolTip())
-        current_cm = ui.get("colormap", "coolwarm")
-        if current_cm in _COLORMAPS:
-            self._colormap_combo.setCurrentText(current_cm)
-        cm_row.addWidget(cm_label)
-        cm_row.addWidget(self._colormap_combo)
-        dg.addLayout(cm_row)
-        self._colormap_combo.currentTextChanged.connect(
-            lambda v: self.param_changed.emit(["ui", "colormap"], v)
-        )
-        layout.addWidget(dev_group)
+        mode = reg.get("alignment_mode", "best_fit")
+        self._alignment_combo = QComboBox()
+        for label, key in _ALIGNMENT_ITEMS:
+            self._alignment_combo.addItem(label, key)
+        for i in range(self._alignment_combo.count()):
+            if self._alignment_combo.itemData(i) == mode:
+                self._alignment_combo.setCurrentIndex(i)
+                break
+        self._alignment_combo.setToolTip(hint.text())
 
-        return w
+        arow = QHBoxLayout()
+        arow.setContentsMargins(0, 0, 0, 0)
+        albl = QLabel("Режим:")
+        albl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        arow.addWidget(albl)
+        arow.addWidget(self._alignment_combo)
+        ag.addLayout(arow)
+
+        self._alignment_combo.currentIndexChanged.connect(self._on_alignment_changed)
 
     def _build_units_group(self) -> QWidget:
         """Группа «Единицы измерения» — два комбобокса CAD и Скан."""
@@ -318,45 +281,6 @@ class ControlPanel(QWidget):
         note.setStyleSheet("color: #707070; font-size: 9px;")
         gl.addWidget(note)
 
-        return group
-
-    def _build_alignment_group(self) -> QWidget:
-        """Группа «Режим выравнивания» — всегда видима."""
-        reg  = self.config.get("registration", {})
-        mode = reg.get("alignment_mode", "best_fit")
-
-        group = QGroupBox("Режим выравнивания")
-        gl = QVBoxLayout(group)
-        gl.setContentsMargins(6, 4, 6, 6)
-        gl.setSpacing(4)
-
-        hint = QLabel(
-            "Наилучшее вписывание: меньше RMSE,\n"
-            "но ICP может скрыть реальное отклонение.\n"
-            "Консервативный: только грубое совмещение."
-        )
-        hint.setWordWrap(True)
-        hint.setStyleSheet("color: #909090; font-size: 10px;")
-        gl.addWidget(hint)
-
-        self._alignment_combo = QComboBox()
-        for label, key in _ALIGNMENT_ITEMS:
-            self._alignment_combo.addItem(label, key)
-        for i in range(self._alignment_combo.count()):
-            if self._alignment_combo.itemData(i) == mode:
-                self._alignment_combo.setCurrentIndex(i)
-                break
-        self._alignment_combo.setToolTip(hint.text())
-
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        lbl = QLabel("Режим:")
-        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        row.addWidget(lbl)
-        row.addWidget(self._alignment_combo)
-        gl.addLayout(row)
-
-        self._alignment_combo.currentIndexChanged.connect(self._on_alignment_changed)
         return group
 
     def _on_alignment_changed(self):
@@ -411,46 +335,28 @@ class ControlPanel(QWidget):
     def _on_mode_changed(self, checked: bool):
         self._apply_mode(checked)
         self.param_changed.emit(["ui", "advanced_mode"], checked)
+        if not checked:
+            self._updating = True
+            for i in range(self._alignment_combo.count()):
+                if self._alignment_combo.itemData(i) == "best_fit":
+                    self._alignment_combo.setCurrentIndex(i)
+                    break
+            self._updating = False
+            self.param_changed.emit(["registration", "alignment_mode"], "best_fit")
 
     def _apply_mode(self, advanced: bool):
-        self._simple_widget.setVisible(not advanced)
-        self._advanced_widget.setVisible(advanced)
+        self._adv_sep.setVisible(advanced)
+        self._preprocess_group.setVisible(advanced)
+        self._registration_group.setVisible(advanced)
+        self._alignment_group.setVisible(advanced)
 
-    def _on_simple_tol_changed(self, value: float):
-        """Простой допуск изменился → синхронизируем расширенный."""
-        if self._updating:
-            return
-        self._updating = True
-        self._adv_tol_spin.setValue(value)
-        self._updating = False
-        self.param_changed.emit(["analysis", "tolerance_mm"], round(value, 4))
+    def _on_tol_changed(self, value: float):
+        if not self._updating:
+            self.param_changed.emit(["analysis", "tolerance_mm"], round(value, 4))
 
-    def _on_adv_tol_changed(self, value: float):
-        """Расширенный допуск изменился → синхронизируем простой."""
-        if self._updating:
-            return
-        self._updating = True
-        self._simple_tol.setValue(value)
-        self._updating = False
-        self.param_changed.emit(["analysis", "tolerance_mm"], round(value, 4))
-
-    def _on_simple_thr_changed(self, value: int):
-        """Простой порог соответствия → синхронизируем расширенный."""
-        if self._updating:
-            return
-        self._updating = True
-        self._adv_thr_spin.setValue(value)
-        self._updating = False
-        self.param_changed.emit(["analysis", "conformance_threshold"], int(value))
-
-    def _on_adv_thr_changed(self, value: int):
-        """Расширенный порог соответствия → синхронизируем простой."""
-        if self._updating:
-            return
-        self._updating = True
-        self._simple_thr.setValue(value)
-        self._updating = False
-        self.param_changed.emit(["analysis", "conformance_threshold"], int(value))
+    def _on_thr_changed(self, value: int):
+        if not self._updating:
+            self.param_changed.emit(["analysis", "conformance_threshold"], int(value))
 
     # ── Вспомогательные фабрики ────────────────────────────────────
 
@@ -536,7 +442,6 @@ class ControlPanel(QWidget):
             pre = config.get("preprocessing", {})
             reg = config.get("registration",  {})
             ana = config.get("analysis",      {})
-            ui  = config.get("ui",            {})
 
             if "voxel_size" in pre:
                 self._voxel_spin.setValue(float(pre["voxel_size"]))
@@ -555,17 +460,10 @@ class ControlPanel(QWidget):
                 self._icp_iter_spin.setValue(int(reg["icp_max_iter"]))
 
             if "tolerance_mm" in ana:
-                tol = float(ana["tolerance_mm"])
-                self._adv_tol_spin.setValue(tol)
-                self._simple_tol.setValue(tol)
+                self._tol_spin.setValue(float(ana["tolerance_mm"]))
 
             if "conformance_threshold" in ana:
-                thr = int(ana["conformance_threshold"])
-                self._adv_thr_spin.setValue(thr)
-                self._simple_thr.setValue(thr)
-
-            if "colormap" in ui and ui["colormap"] in _COLORMAPS:
-                self._colormap_combo.setCurrentText(ui["colormap"])
+                self._thr_spin.setValue(int(ana["conformance_threshold"]))
 
             units = config.get("units", {})
             self._set_unit_combo(self._cad_unit_combo,  units.get("cad"))
@@ -586,7 +484,7 @@ class ControlPanel(QWidget):
 class ResultsPanel(QWidget):
     """
     Панель числовых результатов анализа.
-    Показывает 5 ключевых метрик + вердикт.
+    Показывает метрики, габариты и вердикт.
     """
 
     def __init__(self, parent=None):
@@ -615,6 +513,12 @@ class ResultsPanel(QWidget):
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         layout.addWidget(line)
+
+        # ── Результаты измерений ─────────────────────────────────
+        metrics_group = QGroupBox("Результаты измерений")
+        mg = QVBoxLayout(metrics_group)
+        mg.setContentsMargins(6, 4, 6, 4)
+        mg.setSpacing(2)
 
         metrics = [
             ("mean_deviation",    "Среднее отклонение",     "мм"),
@@ -645,18 +549,12 @@ class ResultsPanel(QWidget):
             row_layout.addWidget(name_label)
             row_layout.addWidget(val_label)
             row_layout.addWidget(unit_label)
-            layout.addWidget(row)
+            mg.addWidget(row)
 
             self._labels[key] = (val_label, unit)
+        layout.addWidget(metrics_group)
 
-        layout.addSpacing(8)
-        self.verdict_label = QLabel("Ожидание анализа...")
-        self.verdict_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.verdict_label.setWordWrap(True)
-        self.verdict_label.setStyleSheet("padding: 6px; border-radius: 4px; color: #c0c0c0;")
-        layout.addWidget(self.verdict_label)
-
-        layout.addSpacing(6)
+        # ── Габаритные размеры ───────────────────────────────────
         dim_group = QGroupBox("Габаритные размеры")
         dg = QVBoxLayout(dim_group)
         dg.setContentsMargins(6, 4, 6, 4)
@@ -681,44 +579,13 @@ class ResultsPanel(QWidget):
             setattr(self, attr, val_lbl)
         layout.addWidget(dim_group)
 
+        # ── Вердикт ──────────────────────────────────────────────
         layout.addSpacing(4)
-        diag_group = QGroupBox("Диагностика регистрации")
-        diag_group.setToolTip(
-            "Насколько точный ICP-проход переместил деталь\n"
-            "и сколько кажущегося отклонения он поглотил."
-        )
-        dg2 = QVBoxLayout(diag_group)
-        dg2.setContentsMargins(6, 4, 6, 4)
-        dg2.setSpacing(2)
-        _diag_fields = [
-            ("_diag_shift",       "Смещение точн. прохода:",  "мм"),
-            ("_diag_rot",         "Поворот точн. прохода:",   "°"),
-            ("_diag_coarse",      "RMSE до точного ICP:",     "мм"),
-            ("_diag_bestfit",     "RMSE после точного ICP:",  "мм"),
-            ("_diag_absorb",      "Разница C2M-RMSE:",        "мм"),
-            ("_diag_coarse_tol",  "Доля в допуске (грубая):", "%"),
-            ("_diag_absorb_tol",  "Маскировка доли:",         "п.п."),
-            ("_diag_mode",        "Режим:",                   ""),
-        ]
-        for attr, lbl_text, unit_text in _diag_fields:
-            row = QWidget()
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(2, 1, 2, 1)
-            name_lbl = QLabel(lbl_text)
-            name_lbl.setStyleSheet("font-size: 10px;")
-            name_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            val_lbl = QLabel("—")
-            val_lbl.setFont(QFont("Courier New", 9))
-            val_lbl.setAlignment(Qt.AlignmentFlag.AlignRight)
-            unit_lbl = QLabel(unit_text)
-            unit_lbl.setMinimumWidth(18)
-            unit_lbl.setStyleSheet("font-size: 10px;")
-            rl.addWidget(name_lbl)
-            rl.addWidget(val_lbl, 1)
-            rl.addWidget(unit_lbl)
-            dg2.addWidget(row)
-            setattr(self, attr, val_lbl)
-        layout.addWidget(diag_group)
+        self.verdict_label = QLabel("Ожидание анализа...")
+        self.verdict_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.verdict_label.setWordWrap(True)
+        self.verdict_label.setStyleSheet("padding: 6px; border-radius: 4px; color: #c0c0c0;")
+        layout.addWidget(self.verdict_label)
 
         layout.addStretch()
 
@@ -766,28 +633,6 @@ class ResultsPanel(QWidget):
             else:
                 self._dim_delta.setText("—")
 
-        _mode_labels = {"best_fit": "Наилучшее вписывание", "conservative": "Консервативный"}
-        self._diag_shift.setText(f"{stats['fine_pass_shift_mm']:.4f}"
-                                  if "fine_pass_shift_mm" in stats else "—")
-        self._diag_rot.setText(f"{stats['fine_pass_rot_deg']:.4f}"
-                                if "fine_pass_rot_deg" in stats else "—")
-        self._diag_coarse.setText(f"{stats['rmse_coarse']:.4f}"
-                                   if "rmse_coarse" in stats else "—")
-        self._diag_bestfit.setText(f"{stats['rmse_bestfit']:.4f}"
-                                    if "rmse_bestfit" in stats else "—")
-        self._diag_absorb.setText(f"{stats['absorbed_deviation_mm']:+.4f}"
-                                   if "absorbed_deviation_mm" in stats else "—")
-        self._diag_coarse_tol.setText(
-            f"{stats['within_tolerance_coarse']*100:.1f}"
-            if "within_tolerance_coarse" in stats else "—"
-        )
-        self._diag_absorb_tol.setText(
-            f"{stats['absorbed_within_tol_pct']*100:+.1f}"
-            if "absorbed_within_tol_pct" in stats else "—"
-        )
-        mode_key = stats.get("alignment_mode", "")
-        self._diag_mode.setText(_mode_labels.get(mode_key, mode_key) if mode_key else "—")
-
     def reset(self):
         for key, (label, _) in self._labels.items():
             label.setText("—")
@@ -796,9 +641,6 @@ class ResultsPanel(QWidget):
         self._dim_cad.setText("—")
         self._dim_scan.setText("—")
         self._dim_delta.setText("—")
-        for attr in ("_diag_shift", "_diag_rot", "_diag_coarse", "_diag_bestfit",
-                     "_diag_absorb", "_diag_coarse_tol", "_diag_absorb_tol", "_diag_mode"):
-            getattr(self, attr).setText("—")
 
 
 # ──────────────────────────────────────────────────────────────────

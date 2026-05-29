@@ -314,6 +314,7 @@ class HelpDialog(QDialog):
         layout.setSpacing(6)
 
         browser = QTextBrowser()
+        browser.setStyleSheet("QTextBrowser { background: #ffffff; color: #212121; }")
         browser.setHtml(_HELP_HTML)
         browser.setOpenExternalLinks(False)
         browser.setReadOnly(True)

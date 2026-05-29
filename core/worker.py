@@ -227,7 +227,7 @@ class AnalysisWorker(QThread):
             )
 
         self._log("⑤ Раскраска облака точек по отклонениям...")
-        colormap_name = self.config.get("ui", {}).get("colormap", "coolwarm")
+        colormap_name = "RdYlGn_r"
         pcd_colored = colorize_point_cloud(
             pcd_registered, deviations, tolerance,
             colormap_name=colormap_name, ambiguous_mask=ambiguous_mask,

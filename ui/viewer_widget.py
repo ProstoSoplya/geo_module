@@ -256,7 +256,7 @@ class ViewerWidget(QWidget):
         self._pv_mesh         = None
         self._deviations      = None
         self._tolerance       = 0.5
-        self._colormap        = config.get("ui", {}).get("colormap", "RdYlGn_r")
+        self._colormap        = "RdYlGn_r"
         self._mode            = "model"   # по умолчанию — только модель
         self._has_data        = False
         self._has_results     = False     # True только после завершения анализа

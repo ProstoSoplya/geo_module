@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QPushButton, QFileDialog, QMessageBox,
     QProgressBar, QProgressDialog, QLabel, QToolBar, QStatusBar,
-    QApplication
+    QApplication, QFrame, QScrollArea
 )
 from PyQt6.QtCore import Qt, QSize, QObject, QEvent
 from PyQt6.QtGui import QAction, QIcon
@@ -223,26 +223,31 @@ class MainWindow(QMainWindow):
 
         h_splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # ── Левая панель ───────────────────────────────────────────
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(4)
+        # ── Левая панель: прокручиваемые параметры + статичные результаты
+        left_splitter = QSplitter(Qt.Orientation.Vertical)
+        left_splitter.setMaximumWidth(320)
+        left_splitter.setMinimumWidth(220)
 
         self.control_panel = ControlPanel(self.config)
         self.control_panel.param_changed.connect(self._on_param_changed)
         self.control_panel.recalculate_requested.connect(self._on_recalculate_tolerance)
-        left_layout.addWidget(self.control_panel)
+
+        control_scroll = QScrollArea()
+        control_scroll.setWidgetResizable(True)
+        control_scroll.setWidget(self.control_panel)
+        control_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        control_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        left_splitter.addWidget(control_scroll)
 
         self.results_panel = ResultsPanel()
         self.results_panel.set_threshold(
             self.config.get("analysis", {}).get("conformance_threshold", 95)
         )
-        left_layout.addWidget(self.results_panel)
+        left_splitter.addWidget(self.results_panel)
 
-        left_panel.setMaximumWidth(320)
-        left_panel.setMinimumWidth(220)
-        h_splitter.addWidget(left_panel)
+        h_splitter.addWidget(left_splitter)
 
         # ── Правая часть: 3D-вид сверху, лог снизу ───────────
         right_panel = QWidget()
@@ -588,7 +593,7 @@ class MainWindow(QMainWindow):
         if npz is not None and "deviations" in npz and saved_stats is not None and self.manager.mesh is not None:
             deviations = npz["deviations"]
             tolerance  = self.config["analysis"]["tolerance_mm"]
-            colormap   = self.config.get("ui", {}).get("colormap", "RdYlGn_r")
+            colormap   = "RdYlGn_r"
 
             # Восстанавливаем зарегистрированное облако точек
             if "pcd_points" in npz:
@@ -650,6 +655,7 @@ class MainWindow(QMainWindow):
                     f"Результаты анализа восстановлены из проекта "
                     f"(дата: {project.get('analysis_date', '—')})"
                 )
+                self._log_registration_diagnostics(new_stats)
 
         self._update_button_states()
         self._update_status_info()
@@ -668,24 +674,76 @@ class MainWindow(QMainWindow):
         secs    = int(elapsed % 60)
         elapsed_str = f"{mins} мин {secs} сек" if mins else f"{secs} сек"
 
-        self.manager.save_results(results)
         self._set_analysis_running(False)
-        self.results_panel.update_results(results["stats"])
 
-        # Показать результаты во встроенном 3D-просмотрщике
-        colormap = self.config.get("ui", {}).get("colormap", "RdYlGn_r")
+        stats      = results["stats"]
+        within_pct = stats["within_tolerance"] * 100
+        rmse       = stats.get("rmse_bestfit", stats.get("registration_rmse", 0))
+
+        # ── Проверка качества совмещения ──────────────────────────
+        suspect   = stats.get("registration_suspect", False)
+        low_within = within_pct < 50
+        high_rmse  = False
+        if self.manager.mesh is not None:
+            bbox_diag = float(np.linalg.norm(
+                self.manager.mesh.get_axis_aligned_bounding_box().get_extent()
+            ))
+            high_rmse = rmse > bbox_diag * 0.03
+
+        if suspect or low_within or high_rmse:
+            self._log(
+                f"[ПРЕДУПРЕЖДЕНИЕ] Низкое качество совмещения: "
+                f"RMSE={rmse:.3f} мм, в допуске={within_pct:.1f}%"
+            )
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Внимание: возможная ошибка совмещения")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText(
+                "Качество совмещения скана и CAD-модели низкое.\n\n"
+                "Возможные причины:\n"
+                "• Загружены файлы разных деталей\n"
+                "• Неверно указаны единицы измерения\n"
+                "• Скан содержит только малую часть поверхности\n\n"
+                f"RMSE совмещения: {rmse:.3f} мм\n"
+                f"Доля точек в допуске: {within_pct:.1f}%\n\n"
+                "Результаты могут быть недостоверными."
+            )
+            btn_cont   = msg.addButton("Продолжить всё равно",
+                                       QMessageBox.ButtonRole.AcceptRole)
+            btn_cancel = msg.addButton("Отменить результаты",
+                                       QMessageBox.ButtonRole.RejectRole)
+            msg.setDefaultButton(btn_cancel)
+            msg.exec()
+
+            if msg.clickedButton() is btn_cancel:
+                self._log("Результаты анализа отклонены пользователем")
+                self.manager.results     = None
+                self.manager.stats       = None
+                self.manager.pcd_colored = None
+                self.manager.deviations  = None
+                self.results_panel.reset()
+                if self.manager.mesh is not None:
+                    self.viewer.load_mesh_preview(self.manager.mesh)
+                self._update_status_info("Результаты отклонены")
+                self._update_button_states()
+                return
+
+        # ── Принять результаты ────────────────────────────────────
+        self.manager.save_results(results)
+        self.results_panel.update_results(stats)
+
         self.viewer.load_results(
             pcd_colored=results["pcd_colored"],
             mesh=self.manager.mesh,
             deviations=results["deviations"],
             tolerance=self.config["analysis"]["tolerance_mm"],
-            colormap=colormap,
+            colormap="RdYlGn_r",
         )
 
-        self._heavy_params_dirty = False   # сброс: тяжёлые параметры применены
+        self._heavy_params_dirty = False
 
-        within_pct = results["stats"]["within_tolerance"] * 100
         self._log(f"Анализ завершён! Точек в допуске: {within_pct:.1f}%")
+        self._log_registration_diagnostics(stats)
         self._update_status_info(f"Анализ завершён за {elapsed_str}")
         self._update_button_states()
 
@@ -705,13 +763,54 @@ class MainWindow(QMainWindow):
 
     # ── Вспомогательные методы ────────────────────────────────────
 
+    def _log_registration_diagnostics(self, stats: dict):
+        """Выводит диагностику регистрации в лог-панель."""
+        if not any(k in stats for k in ("fine_pass_shift_mm", "rmse_coarse")):
+            return
+
+        _mode_labels = {
+            "best_fit": "Наилучшее вписывание",
+            "conservative": "Консервативный",
+        }
+        mode = stats.get("alignment_mode", "best_fit")
+
+        lines = [
+            "── Диагностика регистрации ──",
+            f"  Режим выравнивания:  {_mode_labels.get(mode, mode)}",
+            f"  Смещение точного прохода:    {stats.get('fine_pass_shift_mm', 0):.4f} мм",
+            f"  Поворот точного прохода:     {stats.get('fine_pass_rot_deg', 0):.4f}°",
+            f"  C2M-RMSE грубое:             {stats.get('rmse_coarse', 0):.4f} мм",
+            f"  C2M-RMSE точное (best-fit):  {stats.get('rmse_bestfit', 0):.4f} мм",
+            f"  Разница RMSE (груб.−точн.):  {stats.get('absorbed_deviation_mm', 0):+.4f} мм",
+        ]
+
+        wtc = stats.get("within_tolerance_coarse")
+        wtb = stats.get("within_tolerance_bestfit_down")
+        if wtc is not None:
+            lines.append(f"  Доля в допуске (грубое):     {wtc:.1f}%")
+        if wtb is not None:
+            lines.append(f"  Доля в допуске (best-fit↓):  {wtb:.1f}%")
+
+        abs_pct = stats.get("absorbed_within_tol_pct")
+        if abs_pct is not None:
+            lines.append(f"  Поглощённый допуск:          {abs_pct:.1f}%")
+
+        suspect = stats.get("registration_suspect")
+        if suspect:
+            lines.append("  ⚠ Регистрация подозрительная!")
+
+        lines.append("─" * 30)
+
+        for line in lines:
+            self._log(line)
+
     def _on_recalculate_tolerance(self):
         """Быстрый пересчёт: только статистика + перекраска — без повторной регистрации."""
         if self.manager.deviations is None or self.manager.pcd_colored is None:
             return
 
         tolerance = self.config["analysis"]["tolerance_mm"]
-        colormap  = self.config.get("ui", {}).get("colormap", "RdYlGn_r")
+        colormap  = "RdYlGn_r"
 
         amb_mask = self.manager.ambiguous_mask   # сохранённая маска — не пересчитываем
 
@@ -757,7 +856,6 @@ class MainWindow(QMainWindow):
         _light = (
             ["analysis", "tolerance_mm"],
             ["analysis", "conformance_threshold"],
-            ["ui", "colormap"],
         )
         if key_path not in _light:
             self._heavy_params_dirty = True
