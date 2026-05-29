@@ -528,6 +528,7 @@ class ResultsPanel(QWidget):
             ("within_tolerance",  "Доля в допуске",         "%"),
             ("over_material_pct", "Избыток материала",      "%"),
             ("under_material_pct","Недостаток материала",   "%"),
+            ("ambiguous_sign_pct","Неоднозн. знак",         "%"),
         ]
 
         for key, name, unit in metrics:
@@ -599,6 +600,7 @@ class ResultsPanel(QWidget):
             "within_tolerance":   lambda v: f"{v*100:.1f}",
             "over_material_pct":  lambda v: f"{v*100:.1f}",
             "under_material_pct": lambda v: f"{v*100:.1f}",
+            "ambiguous_sign_pct": lambda v: f"{v*100:.1f}",
         }
 
         for key, (label, _) in self._labels.items():

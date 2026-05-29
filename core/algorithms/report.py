@@ -230,6 +230,7 @@ def generate_report(
     story.append(Paragraph("Результаты измерений", h2_style))
     over_pct  = stats.get("over_material_pct",  0.0) * 100
     under_pct = stats.get("under_material_pct", 0.0) * 100
+    amb_pct   = stats.get("ambiguous_sign_pct", 0.0) * 100
     result_rows = [
         [Paragraph("<b>Метрика</b>", body_style),
          Paragraph("<b>Значение</b>", body_style)],
@@ -240,6 +241,7 @@ def generate_report(
         ["Доля в допуске",                      f"{within_pct:.1f}%  из {n_points:,} точек"],
         ["Избыток материала (> +допуск)",        f"{over_pct:.1f}%"],
         ["Недостаток материала (< −допуск)", f"{under_pct:.1f}%"],
+        ["Точки с неоднозначным знаком",        f"{amb_pct:.1f}%"],
     ]
     res_table = Table(result_rows, colWidths=col_w)
     res_table.setStyle(TableStyle([
