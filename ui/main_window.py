@@ -735,6 +735,26 @@ class MainWindow(QMainWindow):
         self._update_status_info(f"Анализ завершён за {elapsed_str}")
         self._update_button_states()
 
+        # ── Предупреждение о маскировке отклонений ───────────────
+        absorbed_pp = stats.get("absorbed_within_tol_pct", 0.0) * 100
+        absorbed_mm = stats.get("absorbed_deviation_mm", 0.0)
+        tolerance = self.config["analysis"]["tolerance_mm"]
+        if abs(absorbed_pp) > 5.0 or abs(absorbed_mm) > tolerance:
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Внимание: возможная маскировка отклонений")
+            msg.setIcon(QMessageBox.Icon.Warning)
+            msg.setText(
+                f"Точная регистрация (best-fit) изменила долю в допуске на "
+                f"{absorbed_pp:+.1f} п.п.\n"
+                f"Разница C2M-RMSE: {absorbed_mm:.3f} мм.\n\n"
+                f"Это означает, что ICP мог частично компенсировать реальное "
+                f"отклонение детали.\n\n"
+                f"Рекомендация: переключите режим выравнивания на «Консервативный» "
+                f"и сравните результаты."
+            )
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+            msg.exec()
+
     def _on_analysis_error(self, error_msg: str):
         self._set_analysis_running(False)
         # Отмена пользователем приходит тем же сигналом, что и ошибки —
