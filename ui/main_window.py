@@ -487,7 +487,7 @@ class MainWindow(QMainWindow):
         self.btn_cancel.setEnabled(False)
         self.log_panel.set_cancel_enabled(False)
         self.progress_bar.setFormat("Отмена...")
-        self._log("Отмена анализа, ожидайте завершения текущего этапа...")
+        self._log("Отмена запрошена. Будет применена после завершения текущего этапа вычислений (до 60 секунд).")
         self._update_status_info("Отмена анализа...")
 
         # Принудительно отрисовываем UI до того как уйдём в worker.cancel().
