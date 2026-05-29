@@ -375,6 +375,10 @@ class MainWindow(QMainWindow):
     # ── Анализ ─────────────────────────────────────────────────────
 
     def run_analysis(self):
+        if self.worker is not None and self.worker.isRunning():
+            self._log("Анализ уже выполняется")
+            return
+
         if not self.manager.is_ready_for_analysis():
             QMessageBox.warning(self, "Внимание",
                                 "Загрузите CAD-модель и облако точек перед анализом.")
