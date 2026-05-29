@@ -880,10 +880,32 @@ class MainWindow(QMainWindow):
         # при apply_config после открытия проекта.
         if key_path == ["units", "cad"] and self.manager.cad_path:
             if value != self.manager.unit_cad:
+                if self.manager.stats is not None:
+                    reply = QMessageBox.question(
+                        self, "Смена единиц",
+                        "Это приведёт к перезагрузке файла и удалению результатов анализа.\nПродолжить?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
+                        self.control_panel._set_unit_combo(
+                            self.control_panel._cad_unit_combo, self.manager.unit_cad)
+                        self.manager.update_config(key_path, self.manager.unit_cad)
+                        return
                 self._log(f"Единица CAD изменена на «{value}», перезагрузка...")
                 self._load_cad_from_path(self.manager.cad_path)
         elif key_path == ["units", "scan"] and self.manager.scan_path:
             if value != self.manager.unit_scan:
+                if self.manager.stats is not None:
+                    reply = QMessageBox.question(
+                        self, "Смена единиц",
+                        "Это приведёт к перезагрузке файла и удалению результатов анализа.\nПродолжить?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
+                        self.control_panel._set_unit_combo(
+                            self.control_panel._scan_unit_combo, self.manager.unit_scan)
+                        self.manager.update_config(key_path, self.manager.unit_scan)
+                        return
                 self._log(f"Единица скана изменена на «{value}», перезагрузка...")
                 self._load_scan_from_path(self.manager.scan_path)
 
