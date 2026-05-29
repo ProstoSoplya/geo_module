@@ -201,8 +201,6 @@ def _build_worst_points(
     min_cluster_size: int,
 ) -> dict:
     """Формирует worst_points с фильтрацией шумовых выбросов по локальной плотности."""
-    from scipy.spatial import KDTree
-
     n = len(deviations)
     candidate_mask = abs_dev > tolerance
     n_candidates = int(candidate_mask.sum())
@@ -225,13 +223,18 @@ def _build_worst_points(
     avg_step = bbox_diag / (n ** (1.0 / 3.0))
     radius = 3.0 * avg_step
 
-    tree = KDTree(candidate_coords)
-    neighbor_counts = tree.query_ball_point(candidate_coords, r=radius, return_length=True)
+    pcd_cand = o3d.geometry.PointCloud()
+    pcd_cand.points = o3d.utility.Vector3dVector(candidate_coords)
+    tree = o3d.geometry.KDTreeFlann(pcd_cand)
 
-    # neighbor_counts включает саму точку, поэтому порог = min_cluster_size + 1
-    real_defect_local_mask = neighbor_counts >= (min_cluster_size + 1)
+    # search_radius_vector_3d включает саму точку → порог = min_cluster_size + 1
+    threshold = min_cluster_size + 1
+    real_defect_local_mask = np.empty(n_candidates, dtype=bool)
+    for i in range(n_candidates):
+        k, _, _ = tree.search_radius_vector_3d(pcd_cand.points[i], radius)
+        real_defect_local_mask[i] = k >= threshold
+
     noise_count = int(np.sum(~real_defect_local_mask))
-
     real_defect_global_indices = candidate_indices[real_defect_local_mask]
 
     if len(real_defect_global_indices) == 0:
