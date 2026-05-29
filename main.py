@@ -307,7 +307,6 @@ def load_config(path: str = "config.json") -> dict:
         },
         "ui": {
             "advanced_mode": False,
-            "colormap": "RdYlGn_r",
             "last_dir": ""
         },
         "units": {

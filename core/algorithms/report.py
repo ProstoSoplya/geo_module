@@ -166,7 +166,7 @@ def generate_report(
     threshold   = float((config or {}).get("analysis", {}).get("conformance_threshold", 95))
     passed      = within_pct >= threshold
     n_points    = int(stats.get("n_points", 0))
-    colormap    = (config or {}).get("ui", {}).get("colormap", "RdYlGn_r")
+    colormap    = "RdYlGn_r"
 
     doc = SimpleDocTemplate(
         output_path, pagesize=A4,
