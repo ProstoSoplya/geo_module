@@ -133,21 +133,18 @@ def compute_statistics(
     ambiguous_mask: np.ndarray | None = None,
     point_coords: np.ndarray | None = None,
     worst_n: int = 10,
+    min_cluster_size: int = 3,
 ) -> dict:
     """
     Вычисляет статистику по отклонениям.
 
     Параметры:
-        deviations     — знаковые отклонения (float64 ndarray)
-        tolerance      — допуск в мм
-        ambiguous_mask — булева маска точек с неоднозначным знаком (необязательна)
-        point_coords   — координаты (N×3), если переданы — заполняется worst_points
-        worst_n        — число точек с максимальным |отклонением| для worst_points
-
-    Новые поля (не меняют логику вердикта):
-        over_material_pct  — доля точек с dev > +tolerance (избыток материала)
-        under_material_pct — доля точек с dev < -tolerance (недостаток материала)
-        worst_points       — список из worst_n точек с наибольшим |dev| (если point_coords задан)
+        deviations       — знаковые отклонения (float64 ndarray)
+        tolerance        — допуск в мм
+        ambiguous_mask   — булева маска точек с неоднозначным знаком (необязательна)
+        point_coords     — координаты (N×3), если переданы — заполняется worst_points
+        worst_n          — число точек с максимальным |отклонением| для worst_points
+        min_cluster_size — мин. число соседей-кандидатов для подтверждения дефекта
     """
     abs_dev   = np.abs(deviations)
     within_tol= np.sum(abs_dev <= tolerance) / len(deviations)
@@ -178,16 +175,10 @@ def compute_statistics(
     stats["ambiguous_sign_pct"]   = float(amb_count / n) if n > 0 else 0.0
 
     if point_coords is not None and len(point_coords) == n:
-        worst_idx = np.argsort(abs_dev)[::-1][:worst_n]
-        stats["worst_points"] = [
-            {
-                "x":   float(point_coords[i, 0]),
-                "y":   float(point_coords[i, 1]),
-                "z":   float(point_coords[i, 2]),
-                "dev": float(deviations[i]),
-            }
-            for i in worst_idx
-        ]
+        stats.update(_build_worst_points(
+            abs_dev, deviations, point_coords, tolerance,
+            worst_n, min_cluster_size,
+        ))
 
     logger.info(
         f"Статистика: среднее={stats['mean_deviation']:.4f}, "
@@ -199,6 +190,78 @@ def compute_statistics(
     )
 
     return stats
+
+
+def _build_worst_points(
+    abs_dev: np.ndarray,
+    deviations: np.ndarray,
+    point_coords: np.ndarray,
+    tolerance: float,
+    worst_n: int,
+    min_cluster_size: int,
+) -> dict:
+    """Формирует worst_points с фильтрацией шумовых выбросов по локальной плотности."""
+    from scipy.spatial import KDTree
+
+    n = len(deviations)
+    candidate_mask = abs_dev > tolerance
+    n_candidates = int(candidate_mask.sum())
+
+    unfiltered_idx = np.argsort(abs_dev)[::-1][:worst_n]
+
+    if n_candidates < min_cluster_size:
+        return {
+            "worst_points": _idx_to_points(unfiltered_idx, point_coords, deviations),
+            "worst_points_unfiltered": n_candidates < min_cluster_size,
+            "noise_outlier_count": 0,
+        }
+
+    candidate_indices = np.nonzero(candidate_mask)[0]
+    candidate_coords = point_coords[candidate_indices]
+
+    bbox_diag = float(np.linalg.norm(
+        point_coords.max(axis=0) - point_coords.min(axis=0)
+    ))
+    avg_step = bbox_diag / (n ** (1.0 / 3.0))
+    radius = 3.0 * avg_step
+
+    tree = KDTree(candidate_coords)
+    neighbor_counts = tree.query_ball_point(candidate_coords, r=radius, return_length=True)
+
+    # neighbor_counts включает саму точку, поэтому порог = min_cluster_size + 1
+    real_defect_local_mask = neighbor_counts >= (min_cluster_size + 1)
+    noise_count = int(np.sum(~real_defect_local_mask))
+
+    real_defect_global_indices = candidate_indices[real_defect_local_mask]
+
+    if len(real_defect_global_indices) == 0:
+        return {
+            "worst_points": _idx_to_points(unfiltered_idx, point_coords, deviations),
+            "worst_points_unfiltered": True,
+            "noise_outlier_count": noise_count,
+        }
+
+    filtered_abs = abs_dev[real_defect_global_indices]
+    top_local = np.argsort(filtered_abs)[::-1][:worst_n]
+    top_global = real_defect_global_indices[top_local]
+
+    return {
+        "worst_points": _idx_to_points(top_global, point_coords, deviations),
+        "worst_points_unfiltered": False,
+        "noise_outlier_count": noise_count,
+    }
+
+
+def _idx_to_points(indices: np.ndarray, coords: np.ndarray, devs: np.ndarray) -> list[dict]:
+    return [
+        {
+            "x":   float(coords[i, 0]),
+            "y":   float(coords[i, 1]),
+            "z":   float(coords[i, 2]),
+            "dev": float(devs[i]),
+        }
+        for i in indices
+    ]
 
 
 _LUT_CACHE: dict[str, np.ndarray] = {}
