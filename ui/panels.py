@@ -335,14 +335,26 @@ class ControlPanel(QWidget):
     def _on_mode_changed(self, checked: bool):
         self._apply_mode(checked)
         self.param_changed.emit(["ui", "advanced_mode"], checked)
-        if not checked:
-            self._updating = True
+
+    def sync_advanced_widgets(self):
+        """Обновляет спинбоксы расширенного режима из self.config."""
+        self._updating = True
+        try:
+            pre = self.config.get("preprocessing", {})
+            reg = self.config.get("registration",  {})
+            self._voxel_spin.setValue(float(pre.get("voxel_size", 0)))
+            self._sor_k_spin.setValue(int(pre.get("sor_neighbors", 20)))
+            self._sor_std_spin.setValue(float(pre.get("sor_std_ratio", 2.0)))
+            self._ransac_n_spin.setValue(int(reg.get("ransac_n_starts", 5)))
+            self._icp_coarse_spin.setValue(float(reg.get("icp_coarse_pct", 5.0)))
+            self._icp_fine_spin.setValue(float(reg.get("icp_fine_pct", 1.0)))
+            self._icp_iter_spin.setValue(int(reg.get("icp_max_iter", 150)))
             for i in range(self._alignment_combo.count()):
-                if self._alignment_combo.itemData(i) == "best_fit":
+                if self._alignment_combo.itemData(i) == reg.get("alignment_mode", "best_fit"):
                     self._alignment_combo.setCurrentIndex(i)
                     break
+        finally:
             self._updating = False
-            self.param_changed.emit(["registration", "alignment_mode"], "best_fit")
 
     def _apply_mode(self, advanced: bool):
         self._adv_sep.setVisible(advanced)

@@ -862,6 +862,11 @@ class MainWindow(QMainWindow):
 
     def _on_param_changed(self, key_path: list, value):
         self.manager.update_config(key_path, value)
+
+        if key_path == ["ui", "advanced_mode"]:
+            self._on_advanced_mode_changed(value)
+            return
+
         # Только допуск, порог соответствия и цветовая шкала — «лёгкие» параметры
         _light = (
             ["analysis", "tolerance_mm"],
@@ -910,6 +915,16 @@ class MainWindow(QMainWindow):
                         return
                 self._log(f"Единица скана изменена на «{value}», перезагрузка...")
                 self._load_scan_from_path(self.manager.scan_path)
+
+    def _on_advanced_mode_changed(self, advanced: bool):
+        from core.defaults import BASIC_DEFAULTS
+        if not advanced:
+            for section in ("preprocessing", "registration"):
+                for key, val in BASIC_DEFAULTS[section].items():
+                    self.manager.update_config([section, key], val)
+            self._log("Базовый режим: параметры алгоритмов сброшены на стандартные")
+        self._heavy_params_dirty = True
+        self.control_panel.sync_advanced_widgets()
 
     def _set_analysis_running(self, running: bool):
         self.btn_load_cad.setEnabled(not running)
