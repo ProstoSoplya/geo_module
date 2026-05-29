@@ -997,21 +997,21 @@ class MainWindow(QMainWindow):
 
         # Спрашиваем про сохранение если есть результаты анализа
         if self.manager.results is not None or self.manager.stats is not None:
-            reply = QMessageBox.question(
-                self,
-                "Выход из программы",
-                "Сохранить проект перед выходом?",
-                QMessageBox.StandardButton.Save
-                | QMessageBox.StandardButton.Discard
-                | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Save
-            )
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Выход из программы")
+            msg.setText("Сохранить проект перед выходом?")
+            msg.setIcon(QMessageBox.Icon.Question)
+            btn_save   = msg.addButton("Сохранить",      QMessageBox.ButtonRole.AcceptRole)
+            btn_nosave = msg.addButton("Не сохранять",    QMessageBox.ButtonRole.DestructiveRole)
+            btn_cancel = msg.addButton("Отмена",          QMessageBox.ButtonRole.RejectRole)
+            msg.setDefaultButton(btn_save)
+            msg.exec()
 
-            if reply == QMessageBox.StandardButton.Cancel:
+            if msg.clickedButton() == btn_cancel:
                 event.ignore()
                 return
 
-            if reply == QMessageBox.StandardButton.Save:
+            if msg.clickedButton() == btn_save:
                 path, _ = QFileDialog.getSaveFileName(
                     self, "Сохранить проект", "project.json", "JSON файлы (*.json)"
                 )
