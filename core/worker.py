@@ -14,6 +14,7 @@ worker.py — Фоновый поток для выполнения тяжёлы
     analysis_error(str)     — сообщение об ошибке
 """
 
+import copy
 import logging
 import traceback
 
@@ -30,6 +31,7 @@ from core.algorithms.deviation import (
     colorize_point_cloud,
 )
 from core.algorithms.dimensions import compute_dimensions
+from core.defaults import BASIC_DEFAULTS
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +116,13 @@ class AnalysisWorker(QThread):
     def _run_pipeline(self):
         """Выполняет все этапы анализа последовательно."""
         self._stage_text = ""
+
+        advanced = bool(self.config.get("ui", {}).get("advanced_mode", False))
+        if not advanced:
+            self.config = copy.deepcopy(self.config)
+            self.config["preprocessing"] = copy.deepcopy(BASIC_DEFAULTS["preprocessing"])
+            self.config["registration"] = copy.deepcopy(BASIC_DEFAULTS["registration"])
+            self._log("Базовый режим: используются параметры по умолчанию")
 
         # ── Этап 1: Предобработка ─────────────────────────────────
         self._emit_stage("Этап 1/4: Предобработка данных...")
