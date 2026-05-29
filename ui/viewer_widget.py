@@ -261,6 +261,8 @@ class ViewerWidget(QWidget):
         self._has_data        = False
         self._has_results     = False     # True только после завершения анализа
         self._render_pending  = False
+        self._worst_points: list | None = None
+        self._show_markers    = True
         self._toolbar_buttons: list[QPushButton] = []
 
         self._setup_ui()
@@ -406,6 +408,14 @@ class ViewerWidget(QWidget):
         btn_reset.clicked.connect(self._view_reset)
         row.addWidget(btn_reset)
 
+        row.addSpacing(10)
+
+        self._btn_markers = self._mk_toggle("Маркеры дефектов", mode_style, True)
+        self._btn_markers.setEnabled(False)
+        self._btn_markers.setToolTip("Показать/скрыть маркеры худших точек")
+        self._btn_markers.clicked.connect(self._toggle_markers)
+        row.addWidget(self._btn_markers)
+
         row.addStretch()
 
         btn_shot = QPushButton("Скриншот")
@@ -416,7 +426,7 @@ class ViewerWidget(QWidget):
 
         self._toolbar_buttons = [
             self._btn_overlay, self._btn_scan, self._btn_model,
-            btn_reset, btn_shot,
+            btn_reset, btn_shot, self._btn_markers,
         ]
 
         return bar
@@ -490,6 +500,7 @@ class ViewerWidget(QWidget):
         self._has_data        = False
         self._has_results     = False
         self._render_pending  = False
+        self._worst_points    = None
         self._mode            = "model"
         self._btn_model.setChecked(True)
         self._btn_overlay.setChecked(False)
@@ -518,6 +529,18 @@ class ViewerWidget(QWidget):
         """Кнопки Наложение и Скан активны только после завершения анализа."""
         self._btn_overlay.setEnabled(self._has_results)
         self._btn_scan.setEnabled(self._has_results)
+        self._btn_markers.setEnabled(self._has_results and bool(self._worst_points))
+
+    def set_worst_points(self, worst_points: list | None):
+        self._worst_points = worst_points
+        self._update_view_buttons()
+        if self._has_data:
+            self._schedule_render()
+
+    def _toggle_markers(self):
+        self._show_markers = self._btn_markers.isChecked()
+        if self._has_data:
+            self._render()
 
     # ── Рендеринг ─────────────────────────────────────────────────────────────
 
@@ -594,6 +617,25 @@ class ViewerWidget(QWidget):
                     point_size=3,
                     name="pcd",
                 )
+
+        if (show_scan and self._show_markers
+                and self._worst_points and self._has_results):
+            pts = np.array(
+                [[p["x"], p["y"], p["z"]] for p in self._worst_points]
+            )
+            labels = [
+                f"#{i+1}\n{p['dev']:+.3f} мм"
+                for i, p in enumerate(self._worst_points)
+            ]
+            self.plotter.add_point_labels(
+                pts, labels,
+                point_size=15,
+                font_size=11,
+                text_color="yellow",
+                point_color="red",
+                shape_opacity=0.6,
+                name="worst_markers",
+            )
 
         self.plotter.reset_camera()
         self.plotter.render()
