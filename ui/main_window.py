@@ -31,33 +31,19 @@ from PyQt6.QtWidgets import (
     QProgressBar, QProgressDialog, QLabel, QToolBar, QStatusBar,
     QApplication, QFrame, QScrollArea
 )
-from PyQt6.QtCore import Qt, QSize, QObject, QEvent
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QAction
 
 from core.project_manager import ProjectManager
 from core.worker import AnalysisWorker
 from core.algorithms.report import generate_report
 from core.algorithms.deviation import compute_statistics, colorize_point_cloud
 from core.algorithms.dimensions import bbox_summary, suggest_unit_mismatch_hint, compute_dimensions
-from ui.panels import ControlPanel, ResultsPanel, LogPanel
+from ui.panels import ControlPanel, ResultsPanel, LogPanel, _ArrowOnHoverFilter
 from ui.help_dialog import HelpDialog, AboutDialog
 from ui.viewer_widget import ViewerWidget
 
 logger = logging.getLogger(__name__)
-
-
-class _ArrowOnHoverFilter(QObject):
-    """Принудительно показывает стрелку при наведении на кнопку,
-    даже когда активен глобальный WaitCursor."""
-    def eventFilter(self, obj, event):
-        t = event.type()
-        if t == QEvent.Type.Enter:
-            if QApplication.overrideCursor() is not None:
-                QApplication.changeOverrideCursor(Qt.CursorShape.ArrowCursor)
-        elif t == QEvent.Type.Leave:
-            if QApplication.overrideCursor() is not None:
-                QApplication.changeOverrideCursor(Qt.CursorShape.WaitCursor)
-        return False
 
 
 class MainWindow(QMainWindow):

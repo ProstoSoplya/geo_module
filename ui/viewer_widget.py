@@ -261,7 +261,6 @@ class ViewerWidget(QWidget):
         self._has_data        = False
         self._has_results     = False     # True только после завершения анализа
         self._render_pending  = False
-        self._screenshot_path: str | None = None
         self._toolbar_buttons: list[QPushButton] = []
 
         self._setup_ui()
@@ -620,14 +619,7 @@ class ViewerWidget(QWidget):
     def _take_screenshot(self):
         path = os.path.join(tempfile.gettempdir(), "geo_viewer_screenshot.png")
         self.plotter.screenshot(path, transparent_background=False)
-        self._screenshot_path = path
         return path
-
-    def make_screenshot(self) -> str | None:
-        """Снять скриншот текущего вида (для PDF-отчёта)."""
-        if self.plotter.isVisible() and self._has_data:
-            return self._take_screenshot()
-        return None
 
     def make_multiview_screenshots(self) -> list[str]:
         """

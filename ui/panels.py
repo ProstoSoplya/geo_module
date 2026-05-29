@@ -723,9 +723,6 @@ class LogPanel(QWidget):
     def text_edit_clear(self):
         self.text_edit.clear()
 
-    def clear(self):
-        self.text_edit.clear()
-
     def _save_log(self):
         path, _ = QFileDialog.getSaveFileName(
             self, "Сохранить лог", "log.txt",
@@ -741,5 +738,3 @@ class LogPanel(QWidget):
     def set_cancel_enabled(self, enabled: bool):
         self._cancel_btn.setEnabled(enabled)
 
-    def set_cancel_cursor(self, shape):
-        self._cancel_btn.setCursor(shape)

@@ -27,7 +27,6 @@ from reportlab.lib import colors
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
     Table, TableStyle, Image, HRFlowable, PageBreak,
-    KeepTogether,
 )
 
 logger = logging.getLogger(__name__)

@@ -13,7 +13,6 @@ tests/test_registration_robustness.py
     pytest tests/test_registration_robustness.py -v -s
 """
 
-import copy
 import logging
 import sys
 import traceback
