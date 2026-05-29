@@ -573,7 +573,7 @@ class ViewerWidget(QWidget):
                     render_points_as_spheres=False,
                     show_scalar_bar=True,
                     scalar_bar_args={
-                        "title": "",
+                        "title": "Откл., мм",
                         "n_labels": 5,
                         "fmt": "%+.2f",
                         "color": "white",
