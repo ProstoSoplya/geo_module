@@ -633,7 +633,6 @@ class MainWindow(QMainWindow):
                 self.manager.analysis_date = project.get("analysis_date")
 
                 self.results_panel.update_results(new_stats)
-                self.viewer.set_worst_points(new_stats.get("worst_points"))
                 self.viewer.load_results(
                     pcd_colored=pcd_colored,
                     mesh=self.manager.mesh,
@@ -723,7 +722,6 @@ class MainWindow(QMainWindow):
         self.manager.save_results(results)
         self.results_panel.update_results(stats)
 
-        self.viewer.set_worst_points(stats.get("worst_points"))
         self.viewer.load_results(
             pcd_colored=results["pcd_colored"],
             mesh=self.manager.mesh,
