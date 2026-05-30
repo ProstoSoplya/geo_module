@@ -146,9 +146,30 @@ def compute_statistics(
         worst_n          — число точек с максимальным |отклонением| для worst_points
         min_cluster_size — мин. число соседей-кандидатов для подтверждения дефекта
     """
+    n = int(len(deviations))
+    if n == 0:
+        logger.warning("compute_statistics: пустой массив отклонений — нулевые метрики")
+        return {
+            "mean_deviation":       0.0,
+            "median_deviation":     0.0,
+            "rmse":                 0.0,
+            "max_deviation":        0.0,
+            "min_deviation":        0.0,
+            "max_abs_deviation":    0.0,
+            "std_deviation":        0.0,
+            "percentile_95":        0.0,
+            "percentile_99":        0.0,
+            "within_tolerance":     0.0,
+            "over_material_pct":    0.0,
+            "under_material_pct":   0.0,
+            "n_points":             0,
+            "tolerance":            float(tolerance),
+            "ambiguous_sign_count": 0,
+            "ambiguous_sign_pct":   0.0,
+        }
+
     abs_dev   = np.abs(deviations)
-    within_tol= np.sum(abs_dev <= tolerance) / len(deviations)
-    n         = int(len(deviations))
+    within_tol= np.sum(abs_dev <= tolerance) / n
 
     n_over  = int(np.sum(deviations >  tolerance))
     n_under = int(np.sum(deviations < -tolerance))
