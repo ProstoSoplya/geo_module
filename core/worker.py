@@ -16,6 +16,7 @@ worker.py — Фоновый поток для выполнения тяжёлы
 
 import copy
 import logging
+import threading
 import traceback
 
 import open3d as o3d
@@ -63,16 +64,18 @@ class AnalysisWorker(QThread):
         self.pcd    = pcd
         self.mesh   = mesh
         self.config = config
-        self._cancelled  = False
+        # threading.Event даёт гарантированную memory visibility между
+        # потоками — bool полагался на implementation detail CPython GIL.
+        self._cancelled  = threading.Event()
         self._stage_text = ""
 
     def cancel(self):
         """Запросить отмену анализа (проверяется между этапами)."""
-        self._cancelled = True
+        self._cancelled.set()
 
     def _emit_progress(self, value: int):
         """Обновляет прогресс-бар, автоматически переключает текст этапа."""
-        if self._cancelled:
+        if self._cancelled.is_set():
             raise InterruptedError("Анализ отменён пользователем")
 
         for threshold, text in _STAGE_THRESHOLDS:
