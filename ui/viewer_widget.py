@@ -262,6 +262,11 @@ class ViewerWidget(QWidget):
         self._has_results     = False     # True только после завершения анализа
         self._render_pending  = False
         self._toolbar_buttons: list[QPushButton] = []
+        # reset_camera выполняется только при первой загрузке данных или
+        # явном Reset; при смене режима overlay/scan/model восстанавливаем
+        # сохранённую позицию, чтобы не сбрасывать зум на дефект.
+        self._camera_initialized: bool = False
+        self._force_reset_camera: bool = False
 
         self._setup_ui()
 
@@ -433,6 +438,8 @@ class ViewerWidget(QWidget):
 
     def load_mesh_preview(self, mesh: o3d.geometry.TriangleMesh):
         """Показать CAD-модель до выполнения анализа (с рёбрами, непрозрачная)."""
+        # Новые данные → принудительный фрейминг (bbox мог измениться).
+        self._force_reset_camera = True
         self._pv_mesh     = _mesh_to_pv(mesh)
         self._pv_pcd      = None
         self._deviations  = None
@@ -454,6 +461,8 @@ class ViewerWidget(QWidget):
         colormap: str | None = None,
     ):
         """Показать результаты анализа: цветное облако + сетка + шкала."""
+        # Новые данные → принудительный фрейминг (анализ мог сдвинуть скан).
+        self._force_reset_camera = True
         self._pv_pcd     = _pcd_to_pv(pcd_colored, deviations)
         self._pv_mesh    = _mesh_to_pv(mesh)
         self._deviations = deviations
@@ -484,6 +493,8 @@ class ViewerWidget(QWidget):
         self._has_data        = False
         self._has_results     = False
         self._render_pending  = False
+        # Новый набор данных при следующей load_* — нужен фрейминг с нуля.
+        self._camera_initialized = False
         self._mode            = "model"
         self._btn_model.setChecked(True)
         self._btn_overlay.setChecked(False)
@@ -517,6 +528,16 @@ class ViewerWidget(QWidget):
 
     def _render(self):
         self._render_pending = False
+
+        # Сохраняем позицию камеры до plotter.clear(): при смене режима
+        # overlay/scan/model пользователь не теряет приближение/угол.
+        prev_cam = None
+        if self._camera_initialized and self._has_data:
+            try:
+                prev_cam = self.plotter.camera_position
+            except Exception as exc:
+                logger.debug("Не удалось сохранить позицию камеры: %s", exc)
+
         self.plotter.clear()
 
         if not self._has_data:
@@ -589,7 +610,19 @@ class ViewerWidget(QWidget):
                     name="pcd",
                 )
 
-        self.plotter.reset_camera()
+        # Камера: первая загрузка / явный Reset → reset_camera; иначе —
+        # восстанавливаем сохранённую позицию (смена режима не сбрасывает зум).
+        if (not self._camera_initialized) or self._force_reset_camera or prev_cam is None:
+            self.plotter.reset_camera()
+            self._camera_initialized = True
+            self._force_reset_camera = False
+        else:
+            try:
+                self.plotter.camera_position = prev_cam
+            except Exception as exc:
+                logger.debug("Не удалось восстановить камеру: %s", exc)
+                self.plotter.reset_camera()
+
         self.plotter.render()
         # После render() VTK мог создать дочерний OpenGL-виджет,
         # которого не было при _install_mouse_nav() в _setup_ui().
@@ -605,6 +638,9 @@ class ViewerWidget(QWidget):
         self._render()
 
     def _view_reset(self):
+        # Явный сброс по кнопке: на следующем _render не восстанавливаем
+        # старую позицию — пользователь хочет вернуться к обзору.
+        self._force_reset_camera = True
         self.plotter.reset_camera()
         self.plotter.render()
 
