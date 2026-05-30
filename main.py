@@ -289,6 +289,52 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return result
 
 
+def _validate_config_ranges(config: dict) -> None:
+    """
+    Валидирует диапазоны числовых полей config in-place. При нарушении —
+    сбрасывает поле к дефолту и пишет warning в лог.
+    Контракт диапазонов:
+      analysis.tolerance_mm          > 0
+      analysis.conformance_threshold ∈ [0, 100]
+      preprocessing.sor_neighbors    >= 1
+      preprocessing.voxel_size       >= 0 (отрицательные значения = sentinel «не использовать»? в коде -1 имеет смысл sentinel)
+    Поэтому voxel_size валидируем мягче: разрешаем -1 как sentinel, иначе >= 0.
+    """
+    rules = [
+        (["analysis", "tolerance_mm"],
+         0.5, lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0,
+         "должно быть > 0"),
+        (["analysis", "conformance_threshold"],
+         95, lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100,
+         "должно быть в диапазоне [0, 100]"),
+        (["preprocessing", "sor_neighbors"],
+         20, lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 1,
+         "должно быть целым >= 1"),
+        (["preprocessing", "voxel_size"],
+         -1, lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and (v >= 0 or v == -1),
+         "должно быть >= 0 (либо -1 как sentinel)"),
+    ]
+    for key_path, default, predicate, description in rules:
+        section = config
+        for k in key_path[:-1]:
+            if not isinstance(section, dict) or k not in section:
+                section = None
+                break
+            section = section[k]
+        if not isinstance(section, dict):
+            continue
+        leaf = key_path[-1]
+        if leaf not in section:
+            continue
+        value = section[leaf]
+        if not predicate(value):
+            logging.warning(
+                f"config[{'.'.join(key_path)}]={value!r} вне допустимого диапазона "
+                f"({description}) — сброшено к дефолту {default}"
+            )
+            section[leaf] = default
+
+
 def load_config(path: str = "config.json") -> dict:
     """
     Загружает конфигурацию из JSON-файла.
@@ -317,15 +363,19 @@ def load_config(path: str = "config.json") -> dict:
 
     if not os.path.exists(path):
         logging.warning(f"config.json не найден, используются параметры по умолчанию")
+        _validate_config_ranges(defaults)
         return defaults
 
     try:
         with open(path, "r", encoding="utf-8") as f:
             config = json.load(f)
         logging.info(f"Конфигурация загружена из {path}")
-        return _deep_merge(defaults, config)
+        merged = _deep_merge(defaults, config)
+        _validate_config_ranges(merged)
+        return merged
     except Exception as e:
         logging.error(f"Ошибка чтения config.json: {e}")
+        _validate_config_ranges(defaults)
         return defaults
 
 
