@@ -418,7 +418,11 @@ def colorize_point_cloud(
         colors[ambiguous_mask] = np.float32([0.55, 0.55, 0.55])
 
     pcd_colored        = o3d.geometry.PointCloud()
-    pcd_colored.points = pcd.points
+    # Копируем координаты явно: pcd_colored.points = pcd.points даёт
+    # shared Vector3dVector — мутация одного облака меняла бы другое.
+    pcd_colored.points = o3d.utility.Vector3dVector(
+        np.asarray(pcd.points).copy()
+    )
     pcd_colored.colors = o3d.utility.Vector3dVector(
         colors.astype(np.float64, copy=False)
     )
