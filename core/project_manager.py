@@ -36,6 +36,30 @@ UNIT_TO_MM: dict[str, float] = {
 }
 
 
+def _is_safe_project_path(path: str) -> bool:
+    """
+    Контракт безопасности для cad_path/scan_path из внешнего project.json:
+      - должен быть непустой строкой
+      - должен быть абсолютным
+      - не должен содержать сегментов '..' (path traversal)
+      - не должен быть UNC-путём (\\\\server\\share — внешний сетевой ресурс)
+    Open3D исторически имеет segfault на повреждённых STL/PLY (C++); этот
+    фильтр снижает поверхность атаки злонамеренного project.json.
+    """
+    if not isinstance(path, str) or not path:
+        return False
+    # UNC: \\server\share или //server/share
+    if path.startswith("\\\\") or path.startswith("//"):
+        return False
+    if not os.path.isabs(path):
+        return False
+    norm = path.replace("\\", "/")
+    parts = norm.split("/")
+    if any(p == ".." for p in parts):
+        return False
+    return True
+
+
 class ProjectManager:
     """
     Центральный класс — хранит состояние всего приложения.
@@ -273,14 +297,24 @@ class ProjectManager:
         saved_unit_scan = project.get("unit_scan", self.config.get("units", {}).get("scan", "mm"))
 
         if project.get("cad_path"):
-            if os.path.exists(project["cad_path"]):
+            if not _is_safe_project_path(project["cad_path"]):
+                logger.warning(
+                    f"Подозрительный cad_path в project.json — пропущен: "
+                    f"{project['cad_path']!r}"
+                )
+            elif os.path.exists(project["cad_path"]):
                 self.load_cad(project["cad_path"], unit=saved_unit_cad)
             else:
                 self.cad_path = project["cad_path"]   # сохраняем путь для информации
                 missing_files.append(project["cad_path"])
 
         if project.get("scan_path"):
-            if os.path.exists(project["scan_path"]):
+            if not _is_safe_project_path(project["scan_path"]):
+                logger.warning(
+                    f"Подозрительный scan_path в project.json — пропущен: "
+                    f"{project['scan_path']!r}"
+                )
+            elif os.path.exists(project["scan_path"]):
                 self.load_scan(project["scan_path"], unit=saved_unit_scan)
             else:
                 self.scan_path = project["scan_path"]
