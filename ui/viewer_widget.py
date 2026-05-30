@@ -611,8 +611,18 @@ class ViewerWidget(QWidget):
     # ── Скриншоты ─────────────────────────────────────────────────────────────
 
     def _take_screenshot(self):
-        path = os.path.join(tempfile.gettempdir(), "geo_viewer_screenshot.png")
-        self.plotter.screenshot(path, transparent_background=False)
+        # mkstemp даёт уникальное имя — два экземпляра приложения больше не
+        # перезаписывают единый geo_viewer_screenshot.png.
+        fd, path = tempfile.mkstemp(suffix=".png", prefix="geo_viewer_")
+        os.close(fd)
+        try:
+            self.plotter.screenshot(path, transparent_background=False)
+        except Exception:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+            raise
         return path
 
     def make_multiview_screenshots(self) -> list[str]:
@@ -646,7 +656,11 @@ class ViewerWidget(QWidget):
 
         paths = []
         for name, cam_pos, cam_up in cam_configs:
-            out = os.path.join(tempfile.gettempdir(), f"geo_view_{name}.png")
+            # mkstemp даёт уникальный путь; при ошибке удаляем заглушку,
+            # чтобы пустые файлы не накапливались в TEMP.
+            fd, out = tempfile.mkstemp(suffix=".png", prefix=f"geo_view_{name}_")
+            os.close(fd)
+            pl = None
             try:
                 pl = pv.Plotter(off_screen=True, window_size=(750, 560))
                 pl.set_background(self._BG)
@@ -678,10 +692,19 @@ class ViewerWidget(QWidget):
                 pl.camera.up = cam_up
                 pl.reset_camera()
                 pl.screenshot(out, transparent_background=False)
-                pl.close()
                 paths.append(out)
             except Exception as exc:
                 logger.warning("Скриншот вида '%s' не удался: %s", name, exc)
+                try:
+                    os.unlink(out)
+                except OSError:
+                    pass
+            finally:
+                if pl is not None:
+                    try:
+                        pl.close()
+                    except Exception as exc:
+                        logger.debug("Ошибка закрытия off-screen plotter '%s': %s", name, exc)
 
         return paths
 
