@@ -179,7 +179,11 @@ def _ransac_multistart(pcd_down, mesh_pcd_down,
             progress_callback(int(_prog_start + prog_step * (i + 1)))
 
     if not results:
-        logger.warning("Все RANSAC-старты провалились; продолжаем без RANSAC-гипотез")
+        logger.warning(
+            "RANSAC: все %d стартов завершились ошибкой — пайплайн продолжит "
+            "только с identity/PCA-гипотезами (возможна потеря качества)",
+            n_starts,
+        )
         return []
 
     results.sort(key=lambda r: r.fitness, reverse=True)
@@ -422,6 +426,8 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
 
     best_c2m_rmse: float    = float("inf")
     best_T:        np.ndarray = hypotheses[0]
+    n_hyp        = len(hypotheses)
+    n_failed_hyp = 0
 
     for hi, T_h in enumerate(hypotheses):
         try:
@@ -434,7 +440,20 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
                 best_c2m_rmse = c2m
                 best_T        = T_ref
         except Exception as exc:
-            logger.warning(f"  Гипотеза {hi}: ошибка оценки — {exc}")
+            n_failed_hyp += 1
+            logger.warning(
+                "Кандидат %d/%d: ошибка оценки: %s", hi + 1, n_hyp, exc,
+            )
+
+    if n_failed_hyp == n_hyp:
+        logger.warning(
+            "Все %d гипотез провалили оценку — победитель = identity",
+            n_hyp,
+        )
+    elif n_failed_hyp > 0:
+        logger.warning(
+            "Оценка гипотез: %d/%d завершились ошибкой", n_failed_hyp, n_hyp,
+        )
 
     logger.info(f"Победитель: C2M-RMSE={best_c2m_rmse:.4f} мм")
 
