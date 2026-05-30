@@ -14,6 +14,7 @@ main.py — Точка входа в приложение.
 
 import json
 import logging
+import logging.handlers
 import sys
 import os
 
@@ -251,16 +252,39 @@ QToolTip {
 """
 
 
+def _resolve_log_path() -> str:
+    """app.log в user_log_dir; fallback — текущая директория. Создаёт каталог."""
+    log_dir = ""
+    try:
+        import platformdirs
+        log_dir = platformdirs.user_log_dir("GeoDeviation", appauthor=False)
+    except ImportError:
+        log_dir = ""
+    if not log_dir:
+        log_dir = os.getcwd()
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+    except OSError:
+        log_dir = os.getcwd()
+    return os.path.join(log_dir, "app.log")
+
+
 def setup_logging():
     """
     Настраивает логирование.
 
     Два handler'а:
-    - StreamHandler — вывод в консоль (удобно при разработке)
-    - FileHandler   — запись в app.log (для диагностики)
+    - StreamHandler        — вывод в консоль (удобно при разработке)
+    - RotatingFileHandler  — запись в app.log (5 МБ × 3 бэкапа) в user_log_dir,
+      чтобы лог не рос неограниченно и не писался в системные каталоги.
     """
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     date_format = "%H:%M:%S"
+
+    log_path = _resolve_log_path()
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
 
     logging.basicConfig(
         level=logging.INFO,
@@ -268,9 +292,10 @@ def setup_logging():
         datefmt=date_format,
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler("app.log", encoding="utf-8")
+            file_handler,
         ]
     )
+    logging.getLogger("main").info("Лог-файл: %s", log_path)
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
