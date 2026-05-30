@@ -519,6 +519,7 @@ class MainWindow(QMainWindow):
         self.worker.log_message.connect(     self._log,                  qc)
         self.worker.analysis_finished.connect(self._on_analysis_finished, qc)
         self.worker.analysis_error.connect(   self._on_analysis_error,   qc)
+        self.worker.analysis_cancelled.connect(self._on_analysis_cancelled, qc)
 
         self.worker.start()
 
@@ -809,16 +810,16 @@ class MainWindow(QMainWindow):
 
     def _on_analysis_error(self, error_msg: str):
         self._set_analysis_running(False)
-        # Отмена пользователем приходит тем же сигналом, что и ошибки —
-        # отличаем по тексту, чтобы не показывать Critical-диалог.
-        is_cancelled = "отмен" in error_msg.lower()
-        if is_cancelled:
-            self._log("Анализ отменён пользователем")
-            self._update_status_info("Анализ отменён")
-        else:
-            self._log(f"[ОШИБКА] {error_msg}")
-            self._show_error("Ошибка анализа", error_msg)
-            self._update_status_info("Ошибка анализа")
+        self._log(f"[ОШИБКА] {error_msg}")
+        self._show_error("Ошибка анализа", error_msg)
+        self._update_status_info("Ошибка анализа")
+        self._update_button_states()
+
+    def _on_analysis_cancelled(self):
+        """Отмена пользователем — отдельный сигнал, без error-диалога."""
+        self._set_analysis_running(False)
+        self._log("Анализ отменён пользователем")
+        self._update_status_info("Анализ отменён")
         self._update_button_states()
 
     # ── Вспомогательные методы ────────────────────────────────────

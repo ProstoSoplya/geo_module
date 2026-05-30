@@ -51,11 +51,12 @@ class AnalysisWorker(QThread):
         предобработка → регистрация → расчёт отклонений → статистика
     """
 
-    progress_changed  = pyqtSignal(int)   # 0–100
-    stage_changed     = pyqtSignal(str)   # текст текущего этапа
-    log_message       = pyqtSignal(str)   # строка для лога
-    analysis_finished = pyqtSignal(dict)  # словарь с результатами
-    analysis_error    = pyqtSignal(str)   # текст ошибки
+    progress_changed   = pyqtSignal(int)   # 0–100
+    stage_changed      = pyqtSignal(str)   # текст текущего этапа
+    log_message        = pyqtSignal(str)   # строка для лога
+    analysis_finished  = pyqtSignal(dict)  # словарь с результатами
+    analysis_error     = pyqtSignal(str)   # текст ошибки
+    analysis_cancelled = pyqtSignal()      # отмена пользователем — без диалога
 
     def __init__(self, pcd: o3d.geometry.PointCloud,
                  mesh: o3d.geometry.TriangleMesh,
@@ -104,7 +105,7 @@ class AnalysisWorker(QThread):
             self._run_pipeline()
         except InterruptedError as e:
             self._log(f"[Отмена] {e}")
-            self.analysis_error.emit(str(e))
+            self.analysis_cancelled.emit()
         except (RegistrationError, TimeoutError) as e:
             msg = str(e)
             logger.error(f"Ошибка регистрации: {msg}")
