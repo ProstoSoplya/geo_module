@@ -9,6 +9,7 @@ LogPanel     — панель лога (сообщения о ходе рабо�
 """
 
 import logging
+import re
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
@@ -712,11 +713,13 @@ class LogPanel(QWidget):
 
     def _classify_color(self, message: str) -> str:
         m = message.lower()
-        if any(k in m for k in ("ошибка", "error")):
+        # \b-границы по словам: «не завершён» больше не окрашивается зелёным
+        # из-за подстроки «завершён»; «errorless» не считается ошибкой.
+        if re.search(r"\b(ошибка|error)\b", m):
             return "#FF6B6B"
-        if any(k in m for k in ("предупреждение", "warning", "внимание")):
+        if re.search(r"\b(предупреждение|warning|внимание)\b", m):
             return "#FFA726"
-        if any(k in m for k in ("завершён", "успешно", "сохранён")):
+        if re.search(r"\b(завершён|успешно|сохранён)\b", m):
             return "#66BB6A"
         return "#e8e8e8"
 
