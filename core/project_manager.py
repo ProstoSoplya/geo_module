@@ -36,6 +36,44 @@ UNIT_TO_MM: dict[str, float] = {
 }
 
 
+def _deep_merge_config(base: dict, incoming: dict, path: str = "") -> None:
+    """
+    Рекурсивно мерджит incoming в base in-place с валидацией типов.
+    Несовместимые по типу значения (число вместо строки, строка вместо числа,
+    bool↔число) пропускаются с warning — несовместимый project.json не должен
+    падать сразу, но и менять контракт типов алгоритмов не должен.
+    """
+    for key, new_val in incoming.items():
+        key_path = f"{path}.{key}" if path else str(key)
+        if key in base and isinstance(base[key], dict) and isinstance(new_val, dict):
+            _deep_merge_config(base[key], new_val, key_path)
+            continue
+
+        if key in base and base[key] is not None and not _types_compatible(base[key], new_val):
+            logger.warning(
+                f"project.json config[{key_path}]: тип {type(new_val).__name__} "
+                f"несовместим с {type(base[key]).__name__} — поле пропущено"
+            )
+            continue
+
+        base[key] = new_val
+
+
+def _types_compatible(existing, new) -> bool:
+    """True если new можно безопасно подставить вместо existing.
+    bool — отдельный тип (не «число»: True/False как ransac_max_iter недопустимо).
+    int/float взаимозаменяемы."""
+    if isinstance(existing, bool):
+        return isinstance(new, bool)
+    if isinstance(existing, (int, float)):
+        return isinstance(new, (int, float)) and not isinstance(new, bool)
+    if isinstance(existing, str):
+        return isinstance(new, str)
+    if isinstance(existing, (list, tuple)):
+        return isinstance(new, (list, tuple))
+    return True
+
+
 def _is_safe_project_path(path: str) -> bool:
     """
     Контракт безопасности для cad_path/scan_path из внешнего project.json:
@@ -285,9 +323,10 @@ class ProjectManager:
         with open(path, "r", encoding="utf-8") as f:
             project = json.load(f)
 
-        # Восстанавливаем конфиг
-        if "config" in project:
-            self.config.update(project["config"])
+        # Восстанавливаем конфиг через deep_merge с валидацией типов
+        # (защита от config-injection из недоверенного project.json).
+        if "config" in project and isinstance(project["config"], dict):
+            _deep_merge_config(self.config, project["config"])
 
         # Загружаем файлы (не бросаем исключение — сообщаем через missing_files)
         missing_files = []
