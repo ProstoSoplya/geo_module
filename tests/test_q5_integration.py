@@ -291,8 +291,8 @@ def test_pdf_sections():
     try:
         import pypdf
     except ImportError:
-        print("\n[Q5.4  PDF] pypdf not installed — skipping text extraction")
-        return
+        import pytest
+        pytest.skip("pypdf not installed")
 
     _ensure_shared()
     stats      = _SHARED["stats"]
