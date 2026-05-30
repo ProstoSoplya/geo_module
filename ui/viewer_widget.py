@@ -691,5 +691,5 @@ class ViewerWidget(QWidget):
         try:
             self.plotter.close()
         except Exception:
-            pass
+            logger.exception("Ошибка при закрытии plotter ViewerWidget")
         super().closeEvent(event)

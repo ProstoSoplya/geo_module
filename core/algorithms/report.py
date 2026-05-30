@@ -48,8 +48,8 @@ def _register_fonts() -> tuple[str, str]:
             pdfmetrics.registerFont(TTFont("_RptReg",  ttf_reg))
             pdfmetrics.registerFont(TTFont("_RptBold", ttf_bold))
             return "_RptReg", "_RptBold"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Шрифт %s недоступен (%s), пробуем следующий", ttf_reg, exc)
     logger.error("Кириллические шрифты не найдены, используется Helvetica")
     return "Helvetica", "Helvetica-Bold"
 
@@ -559,7 +559,7 @@ def generate_report(
             try:
                 if os.path.exists(tmp):
                     os.unlink(tmp)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Не удалось удалить временный файл %s: %s", tmp, exc)
 
     return output_path

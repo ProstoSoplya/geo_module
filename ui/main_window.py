@@ -501,8 +501,8 @@ class MainWindow(QMainWindow):
         if self.worker is not None:
             try:
                 self.worker.disconnect()
-            except (TypeError, RuntimeError):
-                pass
+            except (TypeError, RuntimeError) as exc:
+                logger.debug("disconnect старого worker: %s", exc)
 
         self.worker = AnalysisWorker(
             self.manager.pcd,
@@ -1113,8 +1113,8 @@ class MainWindow(QMainWindow):
             if self.worker.isRunning():
                 try:
                     self.worker.disconnect()
-                except (TypeError, RuntimeError):
-                    pass
+                except (TypeError, RuntimeError) as exc:
+                    logger.debug("disconnect worker в closeEvent: %s", exc)
 
         # Спрашиваем про сохранение если есть результаты анализа
         if self.manager.results is not None or self.manager.stats is not None:
@@ -1151,12 +1151,12 @@ class MainWindow(QMainWindow):
         try:
             self.manager.save_config("config.json")
         except Exception:
-            pass
+            logger.exception("Не удалось сохранить config.json при выходе")
 
         # Закрываем 3D-просмотрщик после всех диалогов
         try:
             self.viewer.plotter.close()
         except Exception:
-            pass
+            logger.exception("Ошибка при закрытии 3D-просмотрщика")
 
         event.accept()
