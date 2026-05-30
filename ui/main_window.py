@@ -60,6 +60,10 @@ class MainWindow(QMainWindow):
         self._current_status   = "Готов"
         self._heavy_params_dirty = True   # True пока не выполнен хотя бы один анализ
         self._last_dir = self.config.get("ui", {}).get("last_dir", "")
+        # Единый флаг состояния анализа: блокирует все точки входа, которые могут
+        # мутировать manager.mesh/pcd, пока worker держит ссылки на эти объекты.
+        # idle | preparing | running
+        self._analysis_state: str = "idle"
 
         self.setWindowTitle("Модуль анализа отклонений геометрии деталей")
         self.setMinimumSize(1100, 700)
@@ -255,6 +259,23 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(h_splitter, 1)
 
+    # ── Контроль состояния анализа ────────────────────────────────
+
+    def _is_busy(self, action_label: str = "это действие") -> bool:
+        """
+        True если анализ выполняется (state != idle). Показывает warning и
+        возвращает True — вызывающий обязан немедленно return.
+        Защищает manager.mesh/pcd от мутаций, пока worker удерживает ссылки.
+        """
+        if self._analysis_state == "idle":
+            return False
+        QMessageBox.warning(
+            self, "Анализ выполняется",
+            f"Идёт анализ — {action_label} недоступно.\n"
+            "Дождитесь завершения или нажмите «Отмена»."
+        )
+        return True
+
     # ── Drag & Drop ────────────────────────────────────────────────
 
     def dragEnterEvent(self, event):
@@ -266,6 +287,8 @@ class MainWindow(QMainWindow):
         event.ignore()
 
     def dropEvent(self, event):
+        if self._is_busy("загрузка файлов"):
+            return
         urls = event.mimeData().urls()
         for url in urls:
             if not url.isLocalFile():
@@ -287,6 +310,8 @@ class MainWindow(QMainWindow):
     # ── Загрузка файлов ────────────────────────────────────────────
 
     def load_cad(self):
+        if self._is_busy("загрузка CAD"):
+            return
         path, _ = QFileDialog.getOpenFileName(
             self, "Выбрать CAD-модель", self._last_dir,
             "3D-модели (*.stl *.obj);;Все файлы (*.*)"
@@ -297,6 +322,8 @@ class MainWindow(QMainWindow):
             self._load_cad_from_path(path)
 
     def load_scan(self):
+        if self._is_busy("загрузка скана"):
+            return
         path, _ = QFileDialog.getOpenFileName(
             self, "Выбрать облако точек", self._last_dir,
             "Облака точек (*.ply *.pcd *.xyz *.pts);;Все файлы (*.*)"
@@ -375,11 +402,16 @@ class MainWindow(QMainWindow):
     # ── Анализ ─────────────────────────────────────────────────────
 
     def run_analysis(self):
-        if self.worker is not None and self.worker.isRunning():
+        if self._analysis_state != "idle" or (self.worker is not None and self.worker.isRunning()):
             self._log("Анализ уже выполняется")
             return
 
+        # preparing: модальные диалоги ниже не должны позволять параллельный
+        # запуск/смену единиц/перезагрузку файлов через другие точки входа.
+        self._analysis_state = "preparing"
+
         if not self.manager.is_ready_for_analysis():
+            self._analysis_state = "idle"
             QMessageBox.warning(self, "Внимание",
                                 "Загрузите CAD-модель и облако точек перед анализом.")
             return
@@ -400,8 +432,10 @@ class MainWindow(QMainWindow):
             msg.exec()
             clicked = msg.clickedButton()
             if clicked is btn_cancel or clicked is None:
+                self._analysis_state = "idle"
                 return
             if clicked is btn_quick:
+                self._analysis_state = "idle"
                 self._on_recalculate_tolerance()
                 return
             # btn_full → продолжаем в полный анализ
@@ -432,6 +466,7 @@ class MainWindow(QMainWindow):
                 msg.setDefaultButton(btn_cont)
                 msg.exec()
                 if msg.clickedButton() is not btn_cont:
+                    self._analysis_state = "idle"
                     return
 
         # Если раньше был показан цветной скан — скроем его, перерисовав меш.
@@ -496,6 +531,8 @@ class MainWindow(QMainWindow):
         self.worker.cancel()
 
     def save_report(self):
+        if self._is_busy("сохранение отчёта"):
+            return
         if self.manager.stats is None:
             QMessageBox.warning(self, "Внимание", "Сначала выполните анализ.")
             return
@@ -529,6 +566,8 @@ class MainWindow(QMainWindow):
             self._show_error("Ошибка генерации отчёта", str(e))
 
     def save_project(self):
+        if self._is_busy("сохранение проекта"):
+            return False
         path, _ = QFileDialog.getSaveFileName(
             self, "Сохранить проект", "project.json", "JSON файлы (*.json)"
         )
@@ -542,6 +581,8 @@ class MainWindow(QMainWindow):
         return False
 
     def open_project(self):
+        if self._is_busy("открытие проекта"):
+            return
         path, _ = QFileDialog.getOpenFileName(
             self, "Открыть проект", "", "JSON файлы (*.json)"
         )
@@ -889,6 +930,10 @@ class MainWindow(QMainWindow):
         # с новым коэффициентом. Сравниваем со значением, уже применённым к
         # геометрии (unit_cad/unit_scan), чтобы избежать лишней перезагрузки
         # при apply_config после открытия проекта.
+        # Защита: во время анализа смена единиц перегрузила бы mesh/pcd,
+        # с которыми работает worker (Open3D не thread-safe).
+        if key_path in (["units", "cad"], ["units", "scan"]) and self._analysis_state != "idle":
+            return
         if key_path == ["units", "cad"] and self.manager.cad_path:
             if value != self.manager.unit_cad:
                 if self.manager.stats is not None:
@@ -931,6 +976,8 @@ class MainWindow(QMainWindow):
         self.control_panel.sync_advanced_widgets()
 
     def _set_analysis_running(self, running: bool):
+        self._analysis_state = "running" if running else "idle"
+
         self.btn_load_cad.setEnabled(not running)
         self.btn_load_scan.setEnabled(not running)
         self.btn_run.setEnabled(not running)
@@ -943,6 +990,12 @@ class MainWindow(QMainWindow):
         # после — _update_button_states() сама решает, включать ли её
         if running:
             self.btn_report.setEnabled(False)
+
+        # Блокируем control_panel целиком (включая units-комбобоксы) — иначе
+        # _on_param_changed мог бы вызвать _load_*_from_path, который мутирует
+        # manager.mesh/pcd, с которыми параллельно работает worker (Open3D
+        # не thread-safe).
+        self.control_panel.setEnabled(not running)
 
         # Блокируем все кнопки 3D-виджета во время анализа
         self.viewer.set_interactive(not running)
