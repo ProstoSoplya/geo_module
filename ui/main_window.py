@@ -261,6 +261,11 @@ class MainWindow(QMainWindow):
 
     # ── Контроль состояния анализа ────────────────────────────────
 
+    def _colormap(self) -> str:
+        """Единая точка чтения цветовой палитры из конфига.
+        Используется UI-viewer, worker, отчётом — все из одного источника."""
+        return self.config.get("ui", {}).get("colormap", "RdYlGn_r")
+
     def _is_busy(self, action_label: str = "это действие") -> bool:
         """
         True если анализ выполняется (state != idle). Показывает warning и
@@ -640,7 +645,7 @@ class MainWindow(QMainWindow):
         if npz is not None and "deviations" in npz and saved_stats is not None and self.manager.mesh is not None:
             deviations = npz["deviations"]
             tolerance  = self.config["analysis"]["tolerance_mm"]
-            colormap   = "RdYlGn_r"
+            colormap   = self._colormap()
 
             # Восстанавливаем зарегистрированное облако точек
             if "pcd_points" in npz:
@@ -784,7 +789,7 @@ class MainWindow(QMainWindow):
             mesh=self.manager.mesh,
             deviations=results["deviations"],
             tolerance=self.config["analysis"]["tolerance_mm"],
-            colormap="RdYlGn_r",
+            colormap=self._colormap(),
         )
 
         self._heavy_params_dirty = False
@@ -877,7 +882,7 @@ class MainWindow(QMainWindow):
             return
 
         tolerance = self.config["analysis"]["tolerance_mm"]
-        colormap  = "RdYlGn_r"
+        colormap  = self._colormap()
 
         amb_mask = self.manager.ambiguous_mask   # сохранённая маска — не пересчитываем
 
