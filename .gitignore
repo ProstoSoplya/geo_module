@@ -10,3 +10,4 @@ venv/
 config.json
 *.json
 tests/test_suite/
+.claude/

@@ -1086,3 +1086,594 @@
 16:04:29 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
 16:04:29 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: +0.0035 мм, в допуске: 68.5%
 16:04:29 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+14:39:30 [INFO] main: ============================================================
+14:39:30 [INFO] main: Запуск приложения
+14:39:30 [INFO] root: Конфигурация загружена из config.json
+14:39:52 [INFO] core.project_manager: ProjectManager инициализирован
+14:39:55 [INFO] ui.main_window: Главное окно инициализировано
+14:39:55 [INFO] main: Главное окно открыто
+14:40:19 [INFO] core.project_manager: Загрузка CAD-модели: C:/module/Green_Alien.stl
+14:40:20 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+14:40:20 [INFO] core.project_manager: CAD загружена: 615,460 вершин, 206,140 треугольников
+14:40:20 [INFO] core.project_manager: Загрузка облака точек: C:/module/scan.ply
+14:40:20 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+14:40:20 [INFO] core.project_manager: Скан загружен: 76,784 точек
+14:40:20 [INFO] core.project_manager: NPZ сайдкар загружен: C:/module/project.npz
+14:40:20 [INFO] core.project_manager: Проект загружен: C:/module/project.json
+14:40:20 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0034, RMSE=0.0470, макс|отклонение|=0.8305, в допуске=88.2%, избыток=3970, недостаток=5014, неоднозначный знак=2
+14:40:42 [INFO] core.worker: ① Предобработка облака точек...
+14:40:42 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 76,784
+14:40:43 [INFO] core.algorithms.preprocessing: SOR: удалено 381 выбросов. Осталось: 76,403 точек
+14:40:43 [INFO] core.algorithms.preprocessing: Авто voxel_size = 1.8557 (1.5% от диагонали bbox облака 123.72)
+14:40:43 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=1.8557. Точек: 76,403
+14:40:43 [INFO] core.algorithms.preprocessing: Voxel Grid: 76,403 → 3,827 точек (уменьшено в 20.0x)
+14:40:43 [INFO] core.worker:    Предобработка завершена. Осталось точек: 76,403 (полное), 3,827 (прореженное)
+14:40:43 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+14:40:43 [INFO] core.algorithms.registration: Размер модели: [64.11 64.01 80.  ] мм, диагональ: 120.86 мм
+14:40:43 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=2.417, fpfh_r=6.043, ransac_d=3.626
+14:40:43 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=1.8557, адаптивный voxel=2.4173 (разница > 20%)
+14:40:45 [INFO] core.algorithms.registration: Предвыравнивание: смещение [16.456 14.406 -8.868] мм
+14:40:45 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+14:40:46 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+14:40:46 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+14:40:51 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=1.0000, rmse=1.3504
+14:40:56 [INFO] core.algorithms.registration:   RANSAC [2/6]: fitness=0.9724, rmse=1.4685
+14:41:01 [INFO] core.algorithms.registration:   RANSAC [3/6]: fitness=0.9816, rmse=1.3528
+14:41:06 [INFO] core.algorithms.registration:   RANSAC [4/6]: fitness=0.9991, rmse=1.2976
+14:41:11 [INFO] core.algorithms.registration:   RANSAC [5/6]: fitness=1.0000, rmse=0.5859
+14:41:14 [INFO] core.algorithms.registration:   RANSAC [6/6]: fitness=1.0000, rmse=1.2850
+14:41:14 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['1.0000', '1.0000', '1.0000', '0.9991']
+14:41:14 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+14:41:15 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=0.1088 мм
+14:41:17 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=9.2867 мм
+14:41:18 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=0.1088 мм
+14:41:18 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=14.5692 мм
+14:41:18 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=11.2589 мм
+14:41:18 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=0.1088 мм
+14:41:19 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=0.1088 мм
+14:41:19 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=0.1088 мм
+14:41:20 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=0.1088 мм
+14:41:20 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=0.1088 мм
+14:41:20 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=4.230 мм (3.5%), точный=1.571 мм (1.3%)...
+14:41:20 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.216857, fitness=1.0000
+14:41:21 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.216857, fitness=1.0000
+14:41:21 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=0.0000 мм, поворот=0.0000°, rmse_coarse=0.1089 мм, rmse_bestfit=0.1089 мм, absorbed_rmse=0.0000 мм, within_tol_coarse=59.1%, absorbed_within_tol=+0.0 п.п.
+14:41:21 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=1.0000, RMSE=0.216857 мм
+14:41:21 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.216857 мм
+14:41:21 [INFO] core.worker:    Точная регистрация сместила деталь на 0.0000 мм / 0.0000°, разница C2M-RMSE: +0.0000 мм
+14:41:21 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.0 п.п. (с 59.1% до 59.1%) — мера маскировки
+14:41:21 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+14:41:22 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+14:41:22 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+14:41:24 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+14:41:24 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -0.8122, Макс: 0.8309, Среднее: -0.0034
+14:41:25 [INFO] core.worker: ④ Вычисление статистики...
+14:41:26 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0034, RMSE=0.0470, макс|отклонение|=0.8309, в допуске=88.3%, избыток=3964, недостаток=4989, неоднозначный знак=4
+14:41:27 [INFO] core.worker:    Габариты CAD: 95.9 x 59.3 x 64.0 мм  (диаг. 129.6 мм)
+14:41:27 [INFO] core.worker:    Габариты скана: 95.9 x 59.3 x 64.0 мм  (диаг. 129.6 мм)
+14:41:28 [INFO] core.worker:    Неоднозначный знак: 4 точек (0.0%) — точки у рёбер/кромок
+14:41:28 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+14:41:29 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: -0.0034 мм, в допуске: 88.3%
+14:41:29 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+14:42:12 [INFO] core.worker: Базовый режим: используются параметры по умолчанию
+14:42:12 [INFO] core.worker: ① Предобработка облака точек...
+14:42:12 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 76,784
+14:42:13 [INFO] core.algorithms.preprocessing: SOR: удалено 347 выбросов. Осталось: 76,437 точек
+14:42:13 [INFO] core.algorithms.preprocessing: Авто voxel_size = 1.8579 (1.5% от диагонали bbox облака 123.86)
+14:42:13 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=1.8579. Точек: 76,437
+14:42:13 [INFO] core.algorithms.preprocessing: Voxel Grid: 76,437 → 3,827 точек (уменьшено в 20.0x)
+14:42:13 [INFO] core.worker:    Предобработка завершена. Осталось точек: 76,437 (полное), 3,827 (прореженное)
+14:42:13 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+14:42:13 [INFO] core.algorithms.registration: Размер модели: [64.11 64.01 80.  ] мм, диагональ: 120.86 мм
+14:42:13 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=2.417, fpfh_r=6.043, ransac_d=3.626
+14:42:13 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=1.8579, адаптивный voxel=2.4173 (разница > 20%)
+14:42:14 [INFO] core.algorithms.registration: Предвыравнивание: смещение [16.29  14.452 -8.904] мм
+14:42:14 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+14:42:14 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+14:42:14 [INFO] core.algorithms.registration: Запуск RANSAC (5 попыток, до 200000 итераций, top_k=4)...
+14:42:18 [INFO] core.algorithms.registration:   RANSAC [1/5]: fitness=0.9587, rmse=1.7419
+14:42:21 [INFO] core.algorithms.registration:   RANSAC [2/5]: fitness=1.0000, rmse=1.1004
+14:42:25 [INFO] core.algorithms.registration:   RANSAC [3/5]: fitness=0.9991, rmse=1.3082
+14:42:29 [INFO] core.algorithms.registration:   RANSAC [4/5]: fitness=0.9574, rmse=1.8076
+14:42:33 [INFO] core.algorithms.registration:   RANSAC [5/5]: fitness=0.9978, rmse=1.5309
+14:42:33 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['1.0000', '0.9991', '0.9978', '0.9587']
+14:42:33 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+14:42:33 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=0.1841 мм
+14:42:33 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=9.1790 мм
+14:42:33 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=0.1841 мм
+14:42:33 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=14.3576 мм
+14:42:33 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=10.6641 мм
+14:42:33 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=0.1841 мм
+14:42:34 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=0.1841 мм
+14:42:34 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=0.1841 мм
+14:42:34 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=0.1841 мм
+14:42:34 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=0.1841 мм
+14:42:34 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=6.043 мм (5.0%), точный=1.209 мм (1.0%)...
+14:42:34 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.218962, fitness=1.0000
+14:42:34 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.216968, fitness=0.9997
+14:42:34 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=0.0005 мм, поворот=0.0003°, rmse_coarse=0.1841 мм, rmse_bestfit=0.1841 мм, absorbed_rmse=-0.0000 мм, within_tol_coarse=58.3%, absorbed_within_tol=+0.0 п.п.
+14:42:34 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.9997, RMSE=0.216968 мм
+14:42:34 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.216968 мм
+14:42:34 [INFO] core.worker:    Точная регистрация сместила деталь на 0.0005 мм / 0.0003°, разница C2M-RMSE: -0.0000 мм
+14:42:34 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.0 п.п. (с 58.3% до 58.3%) — мера маскировки
+14:42:34 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+14:42:35 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+14:42:35 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+14:42:37 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+14:42:37 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -2.0738, Макс: 2.2570, Среднее: -0.0032
+14:42:37 [INFO] core.worker: ④ Вычисление статистики...
+14:42:38 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0032, RMSE=0.0558, макс|отклонение|=2.2570, в допуске=88.3%, избыток=3978, недостаток=4997, неоднозначный знак=3
+14:42:38 [INFO] core.worker:    Габариты CAD: 95.9 x 59.3 x 64.0 мм  (диаг. 129.6 мм)
+14:42:38 [INFO] core.worker:    Габариты скана: 97.2 x 59.3 x 64.0 мм  (диаг. 130.6 мм)
+14:42:39 [INFO] core.worker:    Неоднозначный знак: 3 точек (0.0%) — точки у рёбер/кромок
+14:42:39 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+14:42:39 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: -0.0032 мм, в допуске: 88.3%
+14:42:39 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+14:45:08 [INFO] core.project_manager: Загрузка облака точек: C:/repos/vuz/course4/2semestr/imba/project/geo_module/nightmare_scan.ply
+14:45:08 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+14:45:08 [INFO] core.project_manager: Скан загружен: 60,000 точек
+14:45:09 [INFO] core.worker: Базовый режим: используются параметры по умолчанию
+14:45:09 [INFO] core.worker: ① Предобработка облака точек...
+14:45:09 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+14:45:09 [INFO] core.algorithms.preprocessing: SOR: удалено 1,530 выбросов. Осталось: 58,470 точек
+14:45:09 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5848 (1.5% от диагонали bbox облака 38.99)
+14:45:09 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5848. Точек: 58,470
+14:45:09 [INFO] core.algorithms.preprocessing: Voxel Grid: 58,470 → 7,685 точек (уменьшено в 7.6x)
+14:45:09 [INFO] core.worker:    Предобработка завершена. Осталось точек: 58,470 (полное), 7,685 (прореженное)
+14:45:09 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+14:45:09 [INFO] core.algorithms.registration: Размер модели: [64.11 64.01 80.  ] мм, диагональ: 120.86 мм
+14:45:09 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=2.417, fpfh_r=6.043, ransac_d=3.626
+14:45:09 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5848, адаптивный voxel=2.4173 (разница > 20%)
+14:45:09 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.237 -14.691  57.58 ] мм
+14:45:09 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+14:45:10 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+14:45:10 [INFO] core.algorithms.registration: Запуск RANSAC (5 попыток, до 200000 итераций, top_k=4)...
+14:45:10 [INFO] core.algorithms.registration:   RANSAC [1/5]: fitness=0.8621, rmse=1.8185
+14:45:10 [INFO] core.algorithms.registration:   RANSAC [2/5]: fitness=0.8621, rmse=1.8185
+14:45:11 [INFO] core.algorithms.registration:   RANSAC [3/5]: fitness=0.8934, rmse=1.7788
+14:45:11 [INFO] core.algorithms.registration:   RANSAC [4/5]: fitness=0.8934, rmse=1.7788
+14:45:11 [INFO] core.algorithms.registration:   RANSAC [5/5]: fitness=0.8621, rmse=1.8185
+14:45:11 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['0.8934', '0.8934', '0.8621', '0.8621']
+14:45:11 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=2.1883 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=2.2070 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=2.1891 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=2.0129 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=1.8874 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=1.6320 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=1.6320 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=1.6313 мм
+14:45:12 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=1.6313 мм
+14:45:12 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=1.6313 мм
+14:45:12 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=6.043 мм (5.0%), точный=1.209 мм (1.0%)...
+14:45:12 [INFO] core.algorithms.registration: ICP проход 1: rmse=1.646509, fitness=1.0000
+14:45:14 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.677323, fitness=0.5265
+14:45:14 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=1.9871 мм, поворот=3.9583°, rmse_coarse=1.6375 мм, rmse_bestfit=1.6483 мм, absorbed_rmse=-0.0108 мм, within_tol_coarse=1.6%, absorbed_within_tol=+0.3 п.п.
+14:45:14 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.5265, RMSE=0.677323 мм
+14:45:14 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.677323 мм
+14:45:14 [INFO] core.worker:    Точная регистрация сместила деталь на 1.9871 мм / 3.9583°, разница C2M-RMSE: -0.0108 мм
+14:45:14 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.3 п.п. (с 1.6% до 1.9%) — мера маскировки
+14:45:14 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+14:45:15 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+14:45:15 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+14:45:16 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+14:45:16 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -4.6629, Макс: 4.7786, Среднее: 0.1594
+14:45:16 [INFO] core.worker: ④ Вычисление статистики...
+14:45:26 [INFO] core.algorithms.deviation: Статистика: среднее=0.1594, RMSE=1.6419, макс|отклонение|=4.7786, в допуске=2.6%, избыток=29518, недостаток=27414, неоднозначный знак=0
+14:45:26 [INFO] core.worker:    Габариты CAD: 95.9 x 59.3 x 64.0 мм  (диаг. 129.6 мм)
+14:45:26 [INFO] core.worker:    Габариты скана: 22.3 x 14.0 x 33.0 мм  (диаг. 42.2 мм)
+14:45:26 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+14:45:26 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: +0.1594 мм, в допуске: 2.6%
+14:45:46 [INFO] core.worker: Базовый режим: используются параметры по умолчанию
+14:45:46 [INFO] core.worker: ① Предобработка облака точек...
+14:45:46 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+14:45:46 [INFO] core.algorithms.preprocessing: SOR: удалено 1,530 выбросов. Осталось: 58,470 точек
+14:45:46 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5848 (1.5% от диагонали bbox облака 38.99)
+14:45:46 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5848. Точек: 58,470
+14:45:46 [INFO] core.algorithms.preprocessing: Voxel Grid: 58,470 → 7,685 точек (уменьшено в 7.6x)
+14:45:46 [INFO] core.worker:    Предобработка завершена. Осталось точек: 58,470 (полное), 7,685 (прореженное)
+14:45:46 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+14:45:46 [INFO] core.algorithms.registration: Размер модели: [64.11 64.01 80.  ] мм, диагональ: 120.86 мм
+14:45:46 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=2.417, fpfh_r=6.043, ransac_d=3.626
+14:45:46 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5848, адаптивный voxel=2.4173 (разница > 20%)
+14:45:46 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.077 -14.759  57.623] мм
+14:45:46 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+14:45:47 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+14:45:47 [INFO] core.algorithms.registration: Запуск RANSAC (5 попыток, до 200000 итераций, top_k=4)...
+14:45:47 [INFO] core.algorithms.registration:   RANSAC [1/5]: fitness=0.7900, rmse=1.9096
+14:45:47 [INFO] core.algorithms.registration:   RANSAC [2/5]: fitness=0.8527, rmse=1.9289
+14:45:48 [INFO] core.algorithms.registration:   RANSAC [3/5]: fitness=0.8652, rmse=1.9538
+14:45:48 [INFO] core.algorithms.registration:   RANSAC [4/5]: fitness=0.7774, rmse=1.8368
+14:45:48 [INFO] core.algorithms.registration:   RANSAC [5/5]: fitness=0.7680, rmse=1.8067
+14:45:48 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['0.8652', '0.8527', '0.7900', '0.7774']
+14:45:48 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=2.1911 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=1.8111 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=1.8857 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=2.1896 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=2.2270 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=2.1281 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=2.1281 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=1.9722 мм
+14:45:48 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=2.1281 мм
+14:45:48 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=1.8111 мм
+14:45:48 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=6.043 мм (5.0%), точный=1.209 мм (1.0%)...
+14:45:49 [INFO] core.algorithms.registration: ICP проход 1: rmse=1.808365, fitness=1.0000
+14:45:55 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.679063, fitness=0.4786
+14:45:55 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=1.0391 мм, поворот=6.4721°, rmse_coarse=1.8152 мм, rmse_bestfit=1.8891 мм, absorbed_rmse=-0.0739 мм, within_tol_coarse=2.8%, absorbed_within_tol=-0.9 п.п.
+14:45:55 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.4786, RMSE=0.679063 мм
+14:45:55 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.679063 мм
+14:45:55 [INFO] core.worker:    Точная регистрация сместила деталь на 1.0391 мм / 6.4721°, разница C2M-RMSE: -0.0739 мм
+14:45:55 [INFO] core.worker:    Точная регистрация повысила долю в допуске на -0.9 п.п. (с 2.8% до 1.9%) — мера маскировки
+14:45:55 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+14:45:56 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+14:45:56 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+14:45:56 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+14:45:56 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -5.2180, Макс: 5.9335, Среднее: 0.4341
+14:45:56 [INFO] core.worker: ④ Вычисление статистики...
+14:46:16 [INFO] core.algorithms.deviation: Статистика: среднее=0.4341, RMSE=1.8534, макс|отклонение|=5.9335, в допуске=2.2%, избыток=33824, недостаток=23343, неоднозначный знак=0
+14:46:16 [INFO] core.worker:    Габариты CAD: 95.9 x 59.3 x 64.0 мм  (диаг. 129.6 мм)
+14:46:16 [INFO] core.worker:    Габариты скана: 30.1 x 25.2 x 21.3 мм  (диаг. 44.7 мм)
+14:46:16 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+14:46:16 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: +0.4341 мм, в допуске: 2.2%
+14:46:17 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+14:46:40 [INFO] core.project_manager: Конфиг сохранён: config.json
+14:46:41 [INFO] main: Приложение завершено с кодом 0
+14:51:21 [INFO] main: ============================================================
+14:51:21 [INFO] main: Запуск приложения
+14:51:21 [INFO] root: Конфигурация загружена из config.json
+14:51:45 [INFO] core.project_manager: ProjectManager инициализирован
+14:51:47 [INFO] ui.main_window: Главное окно инициализировано
+14:51:47 [INFO] main: Главное окно открыто
+14:54:44 [INFO] core.project_manager: Загрузка CAD-модели: C:/repos/vuz/course4/2semestr/imba/project/geo_module/config.json
+14:54:47 [ERROR] ui.main_window: Ошибка загрузки CAD: Файл config.json пустой или повреждён
+14:58:09 [INFO] core.project_manager: Конфиг сохранён: config.json
+14:58:09 [INFO] main: Приложение завершено с кодом 0
+15:00:02 [INFO] main: ============================================================
+15:00:02 [INFO] main: Запуск приложения
+15:00:02 [INFO] root: Конфигурация загружена из config.json
+15:00:07 [INFO] core.project_manager: ProjectManager инициализирован
+15:00:09 [INFO] ui.main_window: Главное окно инициализировано
+15:00:09 [INFO] main: Главное окно открыто
+15:00:34 [INFO] core.project_manager: Загрузка CAD-модели: C:/module/Green_Alien.stl
+15:00:35 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+15:00:35 [INFO] core.project_manager: CAD загружена: 615,460 вершин, 206,140 треугольников
+15:00:35 [INFO] core.project_manager: Загрузка облака точек: C:/module/scan.ply
+15:00:35 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+15:00:35 [INFO] core.project_manager: Скан загружен: 76,784 точек
+15:00:35 [INFO] core.project_manager: NPZ сайдкар загружен: C:/module/project.npz
+15:00:35 [INFO] core.project_manager: Проект загружен: C:/module/project.json
+15:00:35 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0034, RMSE=0.0470, макс|отклонение|=0.8305, в допуске=88.2%, избыток=3970, недостаток=5014, неоднозначный знак=2
+15:01:41 [INFO] core.project_manager: Загрузка облака точек: C:/module/scan.ply
+15:01:41 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+15:01:41 [INFO] core.project_manager: Скан загружен: 76,784 точек
+15:01:41 [INFO] core.project_manager: NPZ сайдкар загружен: C:/module/project.npz
+15:01:41 [INFO] core.project_manager: Проект загружен: C:/module/project.json
+15:01:46 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0034, RMSE=0.0470, макс|отклонение|=0.8305, в допуске=88.2%, избыток=3970, недостаток=5014, неоднозначный знак=2
+15:05:16 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0034, RMSE=0.0470, макс|отклонение|=0.8305, в допуске=88.2%, избыток=3970, недостаток=5014, неоднозначный знак=2
+15:05:50 [INFO] core.project_manager: Проект загружен: C:/module/config.json
+15:06:00 [INFO] core.project_manager: Загрузка CAD-модели: C:/repos/vuz/course4/2semestr/imba/project/geo_module/nightmare_cad.obj
+15:06:00 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+15:06:00 [INFO] core.project_manager: CAD загружена: 792 вершин, 1,572 треугольников
+15:06:17 [INFO] core.project_manager: Конфиг сохранён: config.json
+15:06:17 [INFO] main: Приложение завершено с кодом 0
+15:06:55 [INFO] main: ============================================================
+15:06:55 [INFO] main: Запуск приложения
+15:06:55 [INFO] root: Конфигурация загружена из config.json
+15:06:59 [INFO] core.project_manager: ProjectManager инициализирован
+15:07:00 [INFO] ui.main_window: Главное окно инициализировано
+15:07:00 [INFO] main: Главное окно открыто
+15:11:32 [INFO] core.project_manager: Загрузка CAD-модели: C:/repos/vuz/course4/2semestr/imba/project/geo_module/nightmare_cad.obj
+15:11:32 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+15:11:32 [INFO] core.project_manager: CAD загружена: 792 вершин, 1,572 треугольников
+15:11:35 [INFO] core.project_manager: Загрузка облака точек: C:/repos/vuz/course4/2semestr/imba/project/geo_module/nightmare_scan.ply
+15:11:35 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+15:11:35 [INFO] core.project_manager: Скан загружен: 60,000 точек
+15:11:35 [INFO] core.worker: ① Предобработка облака точек...
+15:11:35 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+15:11:36 [INFO] core.algorithms.preprocessing: SOR: удалено 17,347 выбросов. Осталось: 42,653 точек
+15:11:36 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5828 (1.5% от диагонали bbox облака 38.85)
+15:11:36 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5828. Точек: 42,653
+15:11:36 [INFO] core.algorithms.preprocessing: Voxel Grid: 42,653 → 6,834 точек (уменьшено в 6.2x)
+15:11:36 [INFO] core.worker:    Предобработка завершена. Осталось точек: 42,653 (полное), 6,834 (прореженное)
+15:11:36 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:11:36 [INFO] core.algorithms.registration: Размер модели: [30. 11. 20.] мм, диагональ: 37.70 мм
+15:11:36 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=0.754, fpfh_r=1.885, ransac_d=1.131
+15:11:36 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5828, адаптивный voxel=0.7539 (разница > 20%)
+15:11:36 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.512 -20.077  30.164] мм
+15:11:36 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:11:36 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:11:36 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:11:38 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.9826, rmse=0.4027
+15:11:38 [INFO] core.worker: [Отмена] Анализ отменён пользователем
+15:11:40 [INFO] core.worker: ① Предобработка облака точек...
+15:11:40 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+15:11:40 [INFO] core.algorithms.preprocessing: SOR: удалено 17,347 выбросов. Осталось: 42,653 точек
+15:11:40 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5828 (1.5% от диагонали bbox облака 38.85)
+15:11:40 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5828. Точек: 42,653
+15:11:40 [INFO] core.algorithms.preprocessing: Voxel Grid: 42,653 → 6,834 точек (уменьшено в 6.2x)
+15:11:40 [INFO] core.worker:    Предобработка завершена. Осталось точек: 42,653 (полное), 6,834 (прореженное)
+15:11:40 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:11:40 [INFO] core.algorithms.registration: Размер модели: [30. 11. 20.] мм, диагональ: 37.70 мм
+15:11:40 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=0.754, fpfh_r=1.885, ransac_d=1.131
+15:11:40 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5828, адаптивный voxel=0.7539 (разница > 20%)
+15:11:40 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.567 -20.069  30.176] мм
+15:11:40 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:11:41 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:11:41 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:11:42 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.8232, rmse=0.5942
+15:11:42 [INFO] core.worker: [Отмена] Анализ отменён пользователем
+15:11:46 [INFO] core.worker: ① Предобработка облака точек...
+15:11:46 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+15:11:46 [INFO] core.algorithms.preprocessing: SOR: удалено 17,347 выбросов. Осталось: 42,653 точек
+15:11:46 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5828 (1.5% от диагонали bbox облака 38.85)
+15:11:46 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5828. Точек: 42,653
+15:11:46 [INFO] core.algorithms.preprocessing: Voxel Grid: 42,653 → 6,834 точек (уменьшено в 6.2x)
+15:11:46 [INFO] core.worker:    Предобработка завершена. Осталось точек: 42,653 (полное), 6,834 (прореженное)
+15:11:46 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:11:46 [INFO] core.algorithms.registration: Размер модели: [30. 11. 20.] мм, диагональ: 37.70 мм
+15:11:46 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=0.754, fpfh_r=1.885, ransac_d=1.131
+15:11:46 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5828, адаптивный voxel=0.7539 (разница > 20%)
+15:11:46 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.551 -20.077  30.129] мм
+15:11:46 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:11:47 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:11:47 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:11:48 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.8955, rmse=0.6211
+15:11:48 [INFO] core.worker: [Отмена] Анализ отменён пользователем
+15:11:48 [INFO] core.project_manager: Конфиг сохранён: config.json
+15:11:48 [INFO] main: Приложение завершено с кодом 0
+15:38:17 [INFO] main: ============================================================
+15:38:17 [INFO] main: Запуск приложения
+15:38:17 [INFO] root: Конфигурация загружена из config.json
+15:38:25 [INFO] core.project_manager: ProjectManager инициализирован
+15:38:26 [INFO] ui.main_window: Главное окно инициализировано
+15:38:26 [INFO] main: Главное окно открыто
+15:39:15 [ERROR] ui.main_window: Ошибка загрузки CAD: Неподдерживаемый формат «.json».
+Поддерживаемые форматы CAD-моделей: .obj, .stl
+15:39:34 [INFO] core.project_manager: Загрузка CAD-модели: C:/repos/vuz/course4/2semestr/imba/project/geo_module/nightmare_cad.obj
+15:39:34 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+15:39:34 [INFO] core.project_manager: CAD загружена: 792 вершин, 1,572 треугольников
+15:39:41 [INFO] core.project_manager: Загрузка облака точек: C:/repos/vuz/course4/2semestr/imba/project/geo_module/nightmare_scan.ply
+15:39:41 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+15:39:41 [INFO] core.project_manager: Скан загружен: 60,000 точек
+15:39:42 [INFO] core.worker: ① Предобработка облака точек...
+15:39:42 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+15:39:42 [INFO] core.algorithms.preprocessing: SOR: удалено 17,347 выбросов. Осталось: 42,653 точек
+15:39:42 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5828 (1.5% от диагонали bbox облака 38.85)
+15:39:42 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5828. Точек: 42,653
+15:39:42 [INFO] core.algorithms.preprocessing: Voxel Grid: 42,653 → 6,834 точек (уменьшено в 6.2x)
+15:39:42 [INFO] core.worker:    Предобработка завершена. Осталось точек: 42,653 (полное), 6,834 (прореженное)
+15:39:42 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:39:42 [INFO] core.algorithms.registration: Размер модели: [30. 11. 20.] мм, диагональ: 37.70 мм
+15:39:42 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=0.754, fpfh_r=1.885, ransac_d=1.131
+15:39:42 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5828, адаптивный voxel=0.7539 (разница > 20%)
+15:39:42 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.609 -20.079  30.136] мм
+15:39:42 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:39:43 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:39:43 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:39:44 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.9088, rmse=0.4894
+15:39:45 [INFO] core.algorithms.registration:   RANSAC [2/6]: fitness=0.7479, rmse=0.6009
+15:39:47 [INFO] core.algorithms.registration:   RANSAC [3/6]: fitness=0.9412, rmse=0.5295
+15:39:48 [INFO] core.algorithms.registration:   RANSAC [4/6]: fitness=0.9224, rmse=0.5421
+15:39:49 [INFO] core.algorithms.registration:   RANSAC [5/6]: fitness=0.9615, rmse=0.5135
+15:39:50 [INFO] core.algorithms.registration:   RANSAC [6/6]: fitness=0.8766, rmse=0.5754
+15:39:50 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['0.9615', '0.9412', '0.9224', '0.9088']
+15:39:50 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=2.1547 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=0.8935 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=0.1541 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=0.7252 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=0.9714 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=0.1541 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=0.1541 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=0.1541 мм
+15:39:51 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=0.1541 мм
+15:39:51 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=0.1541 мм
+15:39:51 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=1.319 мм (3.5%), точный=0.490 мм (1.3%)...
+15:39:51 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.190479, fitness=1.0000
+15:39:51 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.187815, fitness=0.9956
+15:39:51 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=0.0034 мм, поворот=0.0379°, rmse_coarse=0.1543 мм, rmse_bestfit=0.1544 мм, absorbed_rmse=-0.0002 мм, within_tol_coarse=30.1%, absorbed_within_tol=+0.0 п.п.
+15:39:51 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.9956, RMSE=0.187815 мм
+15:39:51 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.187815 мм
+15:39:51 [INFO] core.worker:    Точная регистрация сместила деталь на 0.0034 мм / 0.0379°, разница C2M-RMSE: -0.0002 мм
+15:39:51 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.0 п.п. (с 30.1% до 30.1%) — мера маскировки
+15:39:51 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+15:39:51 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+15:39:51 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+15:39:51 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+15:39:51 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -0.5448, Макс: 0.6202, Среднее: 0.0041
+15:39:51 [INFO] core.worker: ④ Вычисление статистики...
+15:41:00 [INFO] core.algorithms.deviation: Статистика: среднее=0.0041, RMSE=0.1570, макс|отклонение|=0.6202, в допуске=29.4%, избыток=15250, недостаток=14854, неоднозначный знак=27
+15:41:00 [INFO] core.worker:    Габариты CAD: 34.9 x 30.6 x 11.9 мм  (диаг. 47.9 мм)
+15:41:00 [INFO] core.worker:    Габариты скана: 34.8 x 30.4 x 11.5 мм  (диаг. 47.6 мм)
+15:41:00 [INFO] core.worker:    Неоднозначный знак: 27 точек (0.1%) — точки у рёбер/кромок
+15:41:00 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+15:41:00 [INFO] core.worker: [Отмена] Анализ отменён пользователем
+15:41:05 [INFO] core.worker: ① Предобработка облака точек...
+15:41:05 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+15:41:06 [INFO] core.algorithms.preprocessing: SOR: удалено 17,347 выбросов. Осталось: 42,653 точек
+15:41:06 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5828 (1.5% от диагонали bbox облака 38.85)
+15:41:06 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5828. Точек: 42,653
+15:41:06 [INFO] core.algorithms.preprocessing: Voxel Grid: 42,653 → 6,834 точек (уменьшено в 6.2x)
+15:41:06 [INFO] core.worker:    Предобработка завершена. Осталось точек: 42,653 (полное), 6,834 (прореженное)
+15:41:06 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:41:06 [INFO] core.algorithms.registration: Размер модели: [30. 11. 20.] мм, диагональ: 37.70 мм
+15:41:06 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=0.754, fpfh_r=1.885, ransac_d=1.131
+15:41:06 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5828, адаптивный voxel=0.7539 (разница > 20%)
+15:41:06 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.528 -20.083  30.138] мм
+15:41:06 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:41:06 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:41:06 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:41:08 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.9715, rmse=0.5503
+15:41:09 [INFO] core.algorithms.registration:   RANSAC [2/6]: fitness=0.8401, rmse=0.5530
+15:41:10 [INFO] core.algorithms.registration:   RANSAC [3/6]: fitness=0.8033, rmse=0.5775
+15:41:11 [INFO] core.algorithms.registration:   RANSAC [4/6]: fitness=0.9173, rmse=0.5193
+15:41:12 [INFO] core.algorithms.registration:   RANSAC [5/6]: fitness=0.9306, rmse=0.4844
+15:41:14 [INFO] core.algorithms.registration:   RANSAC [6/6]: fitness=0.8396, rmse=0.5369
+15:41:14 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['0.9715', '0.9306', '0.9173', '0.8401']
+15:41:14 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=1.8034 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=0.8924 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=0.1541 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=0.7253 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=0.9719 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=0.1541 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=0.1541 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=0.1541 мм
+15:41:14 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=0.1541 мм
+15:41:14 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=0.1541 мм
+15:41:14 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=1.319 мм (3.5%), точный=0.490 мм (1.3%)...
+15:41:14 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.190607, fitness=1.0000
+15:41:14 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.187677, fitness=0.9952
+15:41:14 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=0.0039 мм, поворот=0.0416°, rmse_coarse=0.1543 мм, rmse_bestfit=0.1544 мм, absorbed_rmse=-0.0002 мм, within_tol_coarse=30.2%, absorbed_within_tol=+0.1 п.п.
+15:41:14 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.9952, RMSE=0.187677 мм
+15:41:14 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.187677 мм
+15:41:14 [INFO] core.worker:    Точная регистрация сместила деталь на 0.0039 мм / 0.0416°, разница C2M-RMSE: -0.0002 мм
+15:41:14 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.1 п.п. (с 30.2% до 30.2%) — мера маскировки
+15:41:14 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+15:41:14 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+15:41:14 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+15:41:14 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+15:41:14 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -0.5461, Макс: 0.6220, Среднее: 0.0041
+15:41:14 [INFO] core.worker: ④ Вычисление статистики...
+15:42:27 [INFO] core.algorithms.deviation: Статистика: среднее=0.0041, RMSE=0.1570, макс|отклонение|=0.6220, в допуске=29.4%, избыток=15244, недостаток=14848, неоднозначный знак=27
+15:42:27 [INFO] core.worker:    Габариты CAD: 34.9 x 30.6 x 11.9 мм  (диаг. 47.9 мм)
+15:42:27 [INFO] core.worker:    Габариты скана: 34.8 x 30.4 x 11.5 мм  (диаг. 47.6 мм)
+15:42:27 [INFO] core.worker:    Неоднозначный знак: 27 точек (0.1%) — точки у рёбер/кромок
+15:42:27 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+15:42:27 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: +0.0041 мм, в допуске: 29.4%
+15:42:35 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+15:42:50 [INFO] core.worker: ① Предобработка облака точек...
+15:42:50 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 60,000
+15:42:50 [INFO] core.algorithms.preprocessing: SOR: удалено 3,608 выбросов. Осталось: 56,392 точек
+15:42:50 [INFO] core.algorithms.preprocessing: Авто voxel_size = 0.5843 (1.5% от диагонали bbox облака 38.96)
+15:42:50 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=0.5843. Точек: 56,392
+15:42:50 [INFO] core.algorithms.preprocessing: Voxel Grid: 56,392 → 7,539 точек (уменьшено в 7.5x)
+15:42:50 [INFO] core.worker:    Предобработка завершена. Осталось точек: 56,392 (полное), 7,539 (прореженное)
+15:42:50 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:42:50 [INFO] core.algorithms.registration: Размер модели: [30. 11. 20.] мм, диагональ: 37.70 мм
+15:42:50 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=0.754, fpfh_r=1.885, ransac_d=1.131
+15:42:50 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=0.5843, адаптивный voxel=0.7539 (разница > 20%)
+15:42:51 [INFO] core.algorithms.registration: Предвыравнивание: смещение [-50.496 -20.115  30.24 ] мм
+15:42:51 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:42:51 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:42:51 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:42:52 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.9984, rmse=0.4294
+15:42:54 [INFO] core.algorithms.registration:   RANSAC [2/6]: fitness=0.8344, rmse=0.5346
+15:42:55 [INFO] core.algorithms.registration:   RANSAC [3/6]: fitness=0.9138, rmse=0.5601
+15:42:56 [INFO] core.algorithms.registration:   RANSAC [4/6]: fitness=0.9421, rmse=0.5176
+15:42:58 [INFO] core.algorithms.registration:   RANSAC [5/6]: fitness=0.9143, rmse=0.5718
+15:42:59 [INFO] core.algorithms.registration:   RANSAC [6/6]: fitness=0.9432, rmse=0.4113
+15:42:59 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['0.9984', '0.9432', '0.9421', '0.9143']
+15:42:59 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=1.6228 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=0.8919 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=0.1581 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=0.7294 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=0.9741 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=0.1581 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=0.1581 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=0.1581 мм
+15:42:59 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=0.1581 мм
+15:42:59 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=0.1581 мм
+15:42:59 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=1.319 мм (3.5%), точный=0.490 мм (1.3%)...
+15:42:59 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.192700, fitness=1.0000
+15:42:59 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.188953, fitness=0.9940
+15:42:59 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=0.0046 мм, поворот=0.0513°, rmse_coarse=0.1582 мм, rmse_bestfit=0.1585 мм, absorbed_rmse=-0.0003 мм, within_tol_coarse=78.2%, absorbed_within_tol=+0.8 п.п.
+15:42:59 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.9940, RMSE=0.188953 мм
+15:42:59 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.188953 мм
+15:42:59 [INFO] core.worker:    Точная регистрация сместила деталь на 0.0046 мм / 0.0513°, разница C2M-RMSE: -0.0003 мм
+15:42:59 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.8 п.п. (с 78.2% до 79.0%) — мера маскировки
+15:42:59 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+15:42:59 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+15:42:59 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+15:43:00 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+15:43:00 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -0.6220, Макс: 0.6836, Среднее: 0.0038
+15:43:00 [INFO] core.worker: ④ Вычисление статистики...
+15:43:16 [INFO] core.algorithms.deviation: Статистика: среднее=0.0038, RMSE=0.1637, макс|отклонение|=0.6836, в допуске=78.5%, избыток=6290, недостаток=5811, неоднозначный знак=30
+15:43:16 [INFO] core.worker:    Габариты CAD: 34.9 x 30.6 x 11.9 мм  (диаг. 47.9 мм)
+15:43:16 [INFO] core.worker:    Габариты скана: 34.9 x 30.5 x 11.6 мм  (диаг. 47.8 мм)
+15:43:16 [INFO] core.worker:    Неоднозначный знак: 30 точек (0.1%) — точки у рёбер/кромок
+15:43:16 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+15:43:17 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: +0.0038 мм, в допуске: 78.5%
+15:43:17 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+15:43:44 [INFO] core.algorithms.deviation: Статистика: среднее=0.0038, RMSE=0.1637, макс|отклонение|=0.6836, в допуске=92.7%, избыток=2247, недостаток=1892, неоднозначный знак=30
+15:44:36 [INFO] core.project_manager: Загрузка CAD-модели: C:/repos/vuz/course4/2semestr/imba/project/geo_module/Green_Alien.stl
+15:44:36 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+15:44:36 [INFO] core.project_manager: CAD загружена: 615,460 вершин, 206,140 треугольников
+15:44:39 [INFO] core.project_manager: Загрузка облака точек: C:/repos/vuz/course4/2semestr/imba/project/geo_module/scan.ply
+15:44:39 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+15:44:39 [INFO] core.project_manager: Скан загружен: 76,784 точек
+15:44:41 [INFO] core.worker: ① Предобработка облака точек...
+15:44:41 [INFO] core.algorithms.preprocessing: SOR: начало. Точек до фильтрации: 76,784
+15:44:41 [INFO] core.algorithms.preprocessing: SOR: удалено 355 выбросов. Осталось: 76,429 точек
+15:44:41 [INFO] core.algorithms.preprocessing: Авто voxel_size = 1.8579 (1.5% от диагонали bbox облака 123.86)
+15:44:41 [INFO] core.algorithms.preprocessing: Voxel Grid: начало. voxel_size=1.8579. Точек: 76,429
+15:44:41 [INFO] core.algorithms.preprocessing: Voxel Grid: 76,429 → 3,822 точек (уменьшено в 20.0x)
+15:44:41 [INFO] core.worker:    Предобработка завершена. Осталось точек: 76,429 (полное), 3,822 (прореженное)
+15:44:41 [INFO] core.worker: ② Регистрация (совмещение скана с CAD-моделью)...
+15:44:42 [INFO] core.algorithms.registration: Размер модели: [64.11 64.01 80.  ] мм, диагональ: 120.86 мм
+15:44:42 [INFO] core.algorithms.registration: Адаптивные параметры: voxel=2.417, fpfh_r=6.043, ransac_d=3.626
+15:44:42 [INFO] core.algorithms.registration: Пересчитываем прореживание: preprocessing voxel=1.8579, адаптивный voxel=2.4173 (разница > 20%)
+15:44:42 [INFO] core.algorithms.registration: Предвыравнивание: смещение [16.409 14.286 -8.968] мм
+15:44:42 [INFO] core.algorithms.registration: Вычисление FPFH-дескрипторов...
+15:44:42 [INFO] core.algorithms.registration: PCA: добавлено 4 гипотез
+15:44:42 [INFO] core.algorithms.registration: Запуск RANSAC (6 попыток, до 200000 итераций, top_k=4)...
+15:44:44 [INFO] core.algorithms.registration:   RANSAC [1/6]: fitness=0.9991, rmse=1.4443
+15:44:46 [INFO] core.algorithms.registration:   RANSAC [2/6]: fitness=0.9991, rmse=1.3381
+15:44:48 [INFO] core.algorithms.registration:   RANSAC [3/6]: fitness=0.9197, rmse=1.6802
+15:44:50 [INFO] core.algorithms.registration:   RANSAC [4/6]: fitness=1.0000, rmse=1.1626
+15:44:52 [INFO] core.algorithms.registration:   RANSAC [5/6]: fitness=0.9991, rmse=1.2834
+15:44:54 [INFO] core.algorithms.registration:   RANSAC [6/6]: fitness=1.0000, rmse=1.3199
+15:44:54 [INFO] core.algorithms.registration: RANSAC топ-4: fitness=['1.0000', '1.0000', '0.9991', '0.9991']
+15:44:54 [INFO] core.algorithms.registration: Пул гипотез: 9 (identity=1 + PCA=4 + RANSAC top-4)
+15:44:54 [INFO] core.algorithms.registration:   Гипотеза 0: C2M-RMSE=0.1550 мм
+15:44:54 [INFO] core.algorithms.registration:   Гипотеза 1: C2M-RMSE=11.1853 мм
+15:44:54 [INFO] core.algorithms.registration:   Гипотеза 2: C2M-RMSE=14.4132 мм
+15:44:54 [INFO] core.algorithms.registration:   Гипотеза 3: C2M-RMSE=0.1550 мм
+15:44:55 [INFO] core.algorithms.registration:   Гипотеза 4: C2M-RMSE=9.6630 мм
+15:44:55 [INFO] core.algorithms.registration:   Гипотеза 5: C2M-RMSE=0.1550 мм
+15:44:55 [INFO] core.algorithms.registration:   Гипотеза 6: C2M-RMSE=0.1550 мм
+15:44:55 [INFO] core.algorithms.registration:   Гипотеза 7: C2M-RMSE=0.1550 мм
+15:44:55 [INFO] core.algorithms.registration:   Гипотеза 8: C2M-RMSE=0.1550 мм
+15:44:55 [INFO] core.algorithms.registration: Победитель: C2M-RMSE=0.1550 мм
+15:44:55 [INFO] core.algorithms.registration: Финальный ICP от уточнённой матрицы победителя: грубый=4.230 мм (3.5%), точный=1.571 мм (1.3%)...
+15:44:55 [INFO] core.algorithms.registration: ICP проход 1: rmse=0.218696, fitness=1.0000
+15:44:55 [INFO] core.algorithms.registration: ICP проход 2: rmse=0.218057, fitness=0.9999
+15:44:55 [INFO] core.algorithms.registration: Диагностика: сдвиг точного прохода=0.0002 мм, поворот=0.0002°, rmse_coarse=0.1550 мм, rmse_bestfit=0.1550 мм, absorbed_rmse=-0.0000 мм, within_tol_coarse=96.8%, absorbed_within_tol=+0.0 п.п.
+15:44:55 [INFO] core.algorithms.registration: Регистрация завершена (режим=best_fit): fitness=0.9999, RMSE=0.218057 мм
+15:44:55 [INFO] core.worker:    ICP завершён. RMSE совмещения: 0.218057 мм
+15:44:55 [INFO] core.worker:    Точная регистрация сместила деталь на 0.0002 мм / 0.0002°, разница C2M-RMSE: -0.0000 мм
+15:44:55 [INFO] core.worker:    Точная регистрация повысила долю в допуске на +0.0 п.п. (с 96.8% до 96.8%) — мера маскировки
+15:44:55 [INFO] core.worker: ③ Вычисление отклонений (Cloud-to-Mesh)...
+15:44:55 [INFO] core.worker:    ⚠ Предупреждение: модель не является замкнутой (watertight). Знак отклонения восстановлен по нормали ближайшей грани.
+15:44:55 [INFO] core.algorithms.deviation: Cloud-to-Mesh: вычисление отклонений...
+15:44:56 [WARNING] core.algorithms.deviation: Модель не является замкнутой (watertight). Знак отклонения эвристический — определяется по нормали ближайшей грани. Надёжен только для замкнутых моделей; флаг ambiguous отмечает точки у рёбер/кромок.
+15:44:56 [INFO] core.algorithms.deviation: Отклонения вычислены. Мин: -1.7669, Макс: 1.8419, Среднее: -0.0032
+15:44:56 [INFO] core.worker: ④ Вычисление статистики...
+15:44:56 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0032, RMSE=0.0527, макс|отклонение|=1.8419, в допуске=99.5%, избыток=20, недостаток=334, неоднозначный знак=5
+15:44:56 [INFO] core.worker:    Габариты CAD: 95.9 x 59.3 x 64.0 мм  (диаг. 129.6 мм)
+15:44:56 [INFO] core.worker:    Габариты скана: 97.2 x 59.3 x 64.0 мм  (диаг. 130.6 мм)
+15:44:57 [INFO] core.worker:    Неоднозначный знак: 5 точек (0.0%) — точки у рёбер/кромок
+15:44:57 [INFO] core.worker: ⑤ Раскраска облака точек по отклонениям...
+15:44:57 [INFO] core.worker: ✓ Анализ завершён! Среднее отклонение: -0.0032 мм, в допуске: 99.5%
+15:44:57 [INFO] core.project_manager: Результаты анализа сохранены в ProjectManager
+15:46:08 [INFO] core.project_manager: Конфиг сохранён: config.json
+15:46:08 [INFO] main: Приложение завершено с кодом 0
+15:46:34 [INFO] main: ============================================================
+15:46:34 [INFO] main: Запуск приложения
+15:46:34 [INFO] root: Конфигурация загружена из config.json
+15:46:40 [INFO] core.project_manager: ProjectManager инициализирован
+15:46:41 [INFO] ui.main_window: Главное окно инициализировано
+15:46:41 [INFO] main: Главное окно открыто
+15:46:49 [INFO] core.project_manager: Загрузка CAD-модели: C:/module/Green_Alien.stl
+15:46:50 [INFO] core.project_manager: CAD: масштаб не применяется (единица: mm)
+15:46:50 [INFO] core.project_manager: CAD загружена: 615,460 вершин, 206,140 треугольников
+15:46:50 [INFO] core.project_manager: Загрузка облака точек: C:/module/scan.ply
+15:46:50 [INFO] core.project_manager: Скан: масштаб не применяется (единица: as_is)
+15:46:50 [INFO] core.project_manager: Скан загружен: 76,784 точек
+15:46:50 [INFO] core.project_manager: NPZ сайдкар загружен: C:/module/project.npz
+15:46:50 [INFO] core.project_manager: Проект загружен: C:/module/project.json
+15:46:50 [INFO] core.algorithms.deviation: Статистика: среднее=-0.0034, RMSE=0.0470, макс|отклонение|=0.8305, в допуске=88.2%, избыток=3970, недостаток=5014, неоднозначный знак=2
+15:46:54 [INFO] core.project_manager: Конфиг сохранён: config.json
+15:46:54 [INFO] main: Приложение завершено с кодом 0

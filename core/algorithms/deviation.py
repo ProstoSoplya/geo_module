@@ -179,6 +179,9 @@ def compute_statistics(
             abs_dev, deviations, point_coords, tolerance,
             worst_n, min_cluster_size,
         ))
+        stats["defect_clusters"] = _build_defect_clusters(
+            abs_dev, deviations, point_coords, tolerance, min_cluster_size,
+        )
 
     logger.info(
         f"Статистика: среднее={stats['mean_deviation']:.4f}, "
@@ -253,6 +256,94 @@ def _build_worst_points(
         "worst_points_unfiltered": False,
         "noise_outlier_count": noise_count,
     }
+
+
+def _build_defect_clusters(
+    abs_dev: np.ndarray,
+    deviations: np.ndarray,
+    point_coords: np.ndarray,
+    tolerance: float,
+    min_cluster_size: int,
+) -> list[dict]:
+    """Группирует дефектные точки (|dev| > tolerance) в кластеры, исключая шум."""
+    candidate_mask = abs_dev > tolerance
+    n_candidates = int(candidate_mask.sum())
+    if n_candidates < min_cluster_size:
+        return []
+
+    candidate_indices = np.nonzero(candidate_mask)[0]
+    candidate_coords = point_coords[candidate_indices]
+    candidate_devs = deviations[candidate_indices]
+
+    n = len(deviations)
+    bbox_diag = float(np.linalg.norm(
+        point_coords.max(axis=0) - point_coords.min(axis=0)
+    ))
+    avg_step = bbox_diag / (n ** (1.0 / 3.0))
+    radius = 3.0 * avg_step
+
+    pcd_cand = o3d.geometry.PointCloud()
+    pcd_cand.points = o3d.utility.Vector3dVector(candidate_coords)
+    tree = o3d.geometry.KDTreeFlann(pcd_cand)
+
+    threshold = min_cluster_size + 1
+    real_mask = np.empty(n_candidates, dtype=bool)
+    for i in range(n_candidates):
+        k, _, _ = tree.search_radius_vector_3d(pcd_cand.points[i], radius)
+        real_mask[i] = k >= threshold
+
+    real_local = np.where(real_mask)[0]
+    if len(real_local) == 0:
+        return []
+
+    real_coords = candidate_coords[real_local]
+    real_devs = candidate_devs[real_local]
+
+    pcd_real = o3d.geometry.PointCloud()
+    pcd_real.points = o3d.utility.Vector3dVector(real_coords)
+    tree_real = o3d.geometry.KDTreeFlann(pcd_real)
+
+    visited = np.zeros(len(real_local), dtype=bool)
+    clusters = []
+
+    for start in range(len(real_local)):
+        if visited[start]:
+            continue
+        queue = [start]
+        visited[start] = True
+        members = []
+        while queue:
+            cur = queue.pop(0)
+            members.append(cur)
+            k, idx, _ = tree_real.search_radius_vector_3d(
+                pcd_real.points[cur], radius)
+            for j in range(k):
+                nb = idx[j]
+                if not visited[nb]:
+                    visited[nb] = True
+                    queue.append(nb)
+
+        if len(members) < min_cluster_size:
+            continue
+
+        m = np.array(members)
+        m_devs = real_devs[m]
+        m_coords = real_coords[m]
+        mean_dev = float(np.mean(m_devs))
+        max_abs = float(np.max(np.abs(m_devs)))
+        center = m_coords.mean(axis=0)
+
+        clusters.append({
+            "type": "Избыток материала" if mean_dev > 0 else "Недостаток материала",
+            "max_deviation": max_abs,
+            "point_count": len(members),
+            "center_x": float(center[0]),
+            "center_y": float(center[1]),
+            "center_z": float(center[2]),
+        })
+
+    clusters.sort(key=lambda c: c["max_deviation"], reverse=True)
+    return clusters
 
 
 def _idx_to_points(indices: np.ndarray, coords: np.ndarray, devs: np.ndarray) -> list[dict]:

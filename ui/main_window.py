@@ -614,7 +614,7 @@ class MainWindow(QMainWindow):
                 for _k in ("registration_suspect", "fine_pass_shift_mm", "fine_pass_rot_deg",
                            "rmse_coarse", "rmse_bestfit", "absorbed_deviation_mm", "alignment_mode",
                            "within_tolerance_coarse", "within_tolerance_bestfit_down",
-                           "absorbed_within_tol_pct", "worst_points"):
+                           "absorbed_within_tol_pct", "worst_points", "defect_clusters"):
                     if _k in saved_stats:
                         new_stats[_k] = saved_stats[_k]
 
@@ -698,7 +698,7 @@ class MainWindow(QMainWindow):
                 f"Доля точек в допуске: {within_pct:.1f}%\n\n"
                 "Результаты могут быть недостоверными."
             )
-            btn_cont   = msg.addButton("Продолжить всё равно",
+            btn_cont   = msg.addButton("Продолжить анализ",
                                        QMessageBox.ButtonRole.AcceptRole)
             btn_cancel = msg.addButton("Отменить результаты",
                                        QMessageBox.ButtonRole.RejectRole)
@@ -833,7 +833,7 @@ class MainWindow(QMainWindow):
             "fine_pass_shift_mm", "fine_pass_rot_deg",
             "rmse_coarse", "rmse_bestfit", "absorbed_deviation_mm", "alignment_mode",
             "within_tolerance_coarse", "within_tolerance_bestfit_down",
-            "absorbed_within_tol_pct", "worst_points",
+            "absorbed_within_tol_pct", "worst_points", "defect_clusters",
         )
         for _k in _reg_keys:
             if _k in self.manager.stats:
@@ -858,7 +858,11 @@ class MainWindow(QMainWindow):
             tolerance=tolerance,
             colormap=colormap,
         )
+        within_pct = new_stats["within_tolerance"] * 100
+        n_total = new_stats["n_points"]
+        n_in = int(round(new_stats["within_tolerance"] * n_total))
         self._log(f"Статистика пересчитана с допуском {tolerance:.3f} мм")
+        self._log(f"Точек в допуске: {within_pct:.1f}%  ({n_in:,} из {n_total:,})")
 
     def _on_param_changed(self, key_path: list, value):
         self.manager.update_config(key_path, value)

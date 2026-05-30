@@ -199,15 +199,18 @@ def generate_report(
         f"мм  (CAD загружен в {_unit_labels.get(unit_cad, unit_cad)}, "
         f"скан в {_unit_labels.get(unit_scan, unit_scan)})"
     )
+    def _p(text):
+        return Paragraph(str(text), body_style)
+
     input_rows = [
         [Paragraph("<b>Параметр</b>", body_style),
          Paragraph("<b>Значение</b>",  body_style)],
-        ["CAD-модель",          os.path.basename(cad_path)],
-        ["Треугольников (CAD)", f"{mesh_triangles:,}" if mesh_triangles else "—"],
-        ["Облако точек",        os.path.basename(scan_path)],
-        ["Точек в скане",       f"{n_points:,}" if n_points else "—"],
-        ["Единицы измерения",   unit_str],
-        ["Допуск",              f"±{tolerance:.3f} мм"],
+        [_p("CAD-модель"),          _p(os.path.basename(cad_path))],
+        [_p("Треугольников (CAD)"), _p(f"{mesh_triangles:,}" if mesh_triangles else "—")],
+        [_p("Облако точек"),        _p(os.path.basename(scan_path))],
+        [_p("Точек в скане"),       _p(f"{n_points:,}" if n_points else "—")],
+        [_p("Единицы измерения"),   _p(unit_str)],
+        [_p("Допуск"),              _p(f"±{tolerance:.3f} мм")],
     ]
     col_w = [55 * mm, USABLE_W - 55 * mm]
     in_table = Table(input_rows, colWidths=col_w)
@@ -234,14 +237,14 @@ def generate_report(
     result_rows = [
         [Paragraph("<b>Метрика</b>", body_style),
          Paragraph("<b>Значение</b>", body_style)],
-        ["Среднее отклонение",                  f"{stats.get('mean_deviation', 0):+.4f} мм"],
-        ["RMSE",                                f"{registration_rmse:.6f} мм"],
-        ["Мин. отклонение",                     f"{stats.get('min_deviation', 0):+.4f} мм"],
-        ["Макс. отклонение",                    f"{stats.get('max_deviation', 0):+.4f} мм"],
-        ["Доля в допуске",                      f"{within_pct:.1f}%  из {n_points:,} точек"],
-        ["Избыток материала (> +допуск)",        f"{over_pct:.1f}%"],
-        ["Недостаток материала (< −допуск)", f"{under_pct:.1f}%"],
-        ["Точки с неоднозначным знаком",        f"{amb_pct:.1f}%"],
+        [_p("Среднее отклонение"),              _p(f"{stats.get('mean_deviation', 0):+.4f} мм")],
+        [_p("RMSE"),                            _p(f"{registration_rmse:.6f} мм")],
+        [_p("Мин. отклонение"),                 _p(f"{stats.get('min_deviation', 0):+.4f} мм")],
+        [_p("Макс. отклонение"),                _p(f"{stats.get('max_deviation', 0):+.4f} мм")],
+        [_p("Доля в допуске"),                  _p(f"{within_pct:.1f}%  из {n_points:,} точек")],
+        [_p("Избыток материала (&gt; +допуск)"), _p(f"{over_pct:.1f}%")],
+        [_p("Недостаток материала (&lt; −допуск)"), _p(f"{under_pct:.1f}%")],
+        [_p("Точки с неоднозначным знаком"),    _p(f"{amb_pct:.1f}%")],
     ]
     res_table = Table(result_rows, colWidths=col_w)
     res_table.setStyle(TableStyle([
@@ -273,17 +276,18 @@ def generate_report(
              Paragraph("<b>Y, мм</b>",      body_style),
              Paragraph("<b>Z, мм</b>",      body_style),
              Paragraph("<b>Диаг., мм</b>",  body_style)],
-            ["CAD-модель",
-             f"{cad_d[0]:.2f}", f"{cad_d[1]:.2f}", f"{cad_d[2]:.2f}",
-             f"{dims.get('cad_diag', 0.0):.2f}"],
+            [_p("CAD-модель"),
+             _p(f"{cad_d[0]:.2f}"), _p(f"{cad_d[1]:.2f}"), _p(f"{cad_d[2]:.2f}"),
+             _p(f"{dims.get('cad_diag', 0.0):.2f}")],
         ]
         if scan_d is not None:
-            dim_rows.append(["Скан",
-                f"{scan_d[0]:.2f}", f"{scan_d[1]:.2f}", f"{scan_d[2]:.2f}",
-                f"{dims.get('scan_diag', 0.0):.2f}"])
+            dim_rows.append([_p("Скан"),
+                _p(f"{scan_d[0]:.2f}"), _p(f"{scan_d[1]:.2f}"), _p(f"{scan_d[2]:.2f}"),
+                _p(f"{dims.get('scan_diag', 0.0):.2f}")])
         if delta_d is not None:
-            dim_rows.append(["Δ (Скан − CAD)",
-                f"{delta_d[0]:+.2f}", f"{delta_d[1]:+.2f}", f"{delta_d[2]:+.2f}", "—"])
+            dim_rows.append([_p("Δ (Скан − CAD)"),
+                _p(f"{delta_d[0]:+.2f}"), _p(f"{delta_d[1]:+.2f}"), _p(f"{delta_d[2]:+.2f}"),
+                _p("—")])
         dim_table = Table(dim_rows, colWidths=[45 * mm, cw4, cw4, cw4, cw4])
         dim_table.setStyle(TableStyle([
             ("FONTNAME",   (0, 0), (-1, -1), font_reg),
@@ -311,22 +315,22 @@ def generate_report(
         diag_rows = [
             [Paragraph("<b>Параметр</b>", body_style),
              Paragraph("<b>Значение</b>", body_style)],
-            ["Смещение точного прохода",
-             f"{stats.get('fine_pass_shift_mm', 0):.4f} мм"],
-            ["Поворот точного прохода",
-             f"{stats.get('fine_pass_rot_deg', 0):.4f}°"],
-            ["C2M-RMSE до точного ICP (грубое)",
-             f"{stats.get('rmse_coarse', 0):.4f} мм"],
-            ["C2M-RMSE после точного ICP (best-fit)",
-             f"{stats.get('rmse_bestfit', 0):.4f} мм"],
-            ["Разница C2M-RMSE (груб. − точн.)",
-             f"{stats.get('absorbed_deviation_mm', 0):+.4f} мм"],
-            ["Доля в допуске при грубом совмещении",
-             f"{wtc:.1f}%"],
-            ["Маскировка доли в допуске",
-             f"{abs_pp:+.1f} п.п.  (с {wtc:.1f}% до {wtbf:.1f}%)"],
-            ["Режим выравнивания",
-             _mode_labels.get(stats.get("alignment_mode", ""), stats.get("alignment_mode", "—"))],
+            [_p("Смещение точного прохода"),
+             _p(f"{stats.get('fine_pass_shift_mm', 0):.4f} мм")],
+            [_p("Поворот точного прохода"),
+             _p(f"{stats.get('fine_pass_rot_deg', 0):.4f}°")],
+            [_p("C2M-RMSE до точного ICP (грубое)"),
+             _p(f"{stats.get('rmse_coarse', 0):.4f} мм")],
+            [_p("C2M-RMSE после точного ICP (best-fit)"),
+             _p(f"{stats.get('rmse_bestfit', 0):.4f} мм")],
+            [_p("Разница C2M-RMSE (груб. − точн.)"),
+             _p(f"{stats.get('absorbed_deviation_mm', 0):+.4f} мм")],
+            [_p("Доля в допуске при грубом совмещении"),
+             _p(f"{wtc:.1f}%")],
+            [_p("Маскировка доли в допуске"),
+             _p(f"{abs_pp:+.1f} п.п.  (с {wtc:.1f}% до {wtbf:.1f}%)")],
+            [_p("Режим выравнивания"),
+             _p(_mode_labels.get(stats.get("alignment_mode", ""), stats.get("alignment_mode", "—")))],
         ]
         diag_table = Table(diag_rows, colWidths=col_w)
         diag_table.setStyle(TableStyle([
@@ -476,11 +480,11 @@ def generate_report(
         cw5_val = (USABLE_W - cw5_lbl) / 4
         for idx, pt in enumerate(worst_pts, 1):
             wp_rows.append([
-                str(idx),
-                f"{pt['x']:+.3f}",
-                f"{pt['y']:+.3f}",
-                f"{pt['z']:+.3f}",
-                f"{pt['dev']:+.4f}",
+                _p(str(idx)),
+                _p(f"{pt['x']:+.3f}"),
+                _p(f"{pt['y']:+.3f}"),
+                _p(f"{pt['z']:+.3f}"),
+                _p(f"{pt['dev']:+.4f}"),
             ])
         wp_table = Table(wp_rows, colWidths=[cw5_lbl, cw5_val, cw5_val, cw5_val, cw5_val])
         wp_table.setStyle(TableStyle([
@@ -497,6 +501,48 @@ def generate_report(
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         story.append(wp_table)
+
+    # Таблица дефектов (кластеры)
+    defect_clusters = stats.get("defect_clusters")
+    if defect_clusters:
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph("Обнаруженные дефекты", h2_style))
+        dc_col_w = [10 * mm, 38 * mm, 26 * mm, 18 * mm, 27 * mm, 27 * mm, 27 * mm]
+        dc_rows = [
+            [Paragraph("<b>#</b>",              body_style),
+             Paragraph("<b>Тип дефекта</b>",    body_style),
+             Paragraph("<b>Макс. откл., мм</b>", body_style),
+             Paragraph("<b>Точек</b>",          body_style),
+             Paragraph("<b>X, мм</b>",          body_style),
+             Paragraph("<b>Y, мм</b>",          body_style),
+             Paragraph("<b>Z, мм</b>",          body_style)],
+        ]
+        for idx, cl in enumerate(defect_clusters, 1):
+            dc_rows.append([
+                _p(str(idx)),
+                _p(cl["type"]),
+                _p(f"{cl['max_deviation']:+.4f}"),
+                _p(str(cl["point_count"])),
+                _p(f"{cl['center_x']:+.2f}"),
+                _p(f"{cl['center_y']:+.2f}"),
+                _p(f"{cl['center_z']:+.2f}"),
+            ])
+        dc_table = Table(dc_rows, colWidths=dc_col_w)
+        dc_table.setStyle(TableStyle([
+            ("FONTNAME",   (0, 0), (-1, -1), font_reg),
+            ("FONTNAME",   (0, 0), (-1,  0), font_bold),
+            ("FONTSIZE",   (0, 0), (-1, -1), 9),
+            ("BACKGROUND", (0, 0), (-1,  0), colors.HexColor("#37474F")),
+            ("TEXTCOLOR",  (0, 0), (-1,  0), colors.white),
+            ("GRID",       (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.white, colors.HexColor("#F5F5F5")]),
+            ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(dc_table)
 
     # ── Сборка документа ──────────────────────────────────────────────────────
     try:

@@ -82,6 +82,9 @@ class ProjectManager:
 
     # ── Загрузка файлов ────────────────────────────────────────────
 
+    _SUPPORTED_CAD_EXT  = {".stl", ".obj"}
+    _SUPPORTED_SCAN_EXT = {".ply", ".pcd", ".xyz", ".pts"}
+
     def load_cad(self, path: str, unit: str = None) -> o3d.geometry.TriangleMesh:
         """
         Загружает CAD-модель из STL/OBJ файла.
@@ -91,6 +94,14 @@ class ProjectManager:
         Масштабирование к мм происходит сразу после чтения, до любых
         вычислений bounding box, от которых зависят адаптивные пороги.
         """
+        ext = os.path.splitext(path)[1].lower()
+        if ext not in self._SUPPORTED_CAD_EXT:
+            supported = ", ".join(sorted(self._SUPPORTED_CAD_EXT))
+            raise ValueError(
+                f"Неподдерживаемый формат «{ext}».\n"
+                f"Поддерживаемые форматы CAD-моделей: {supported}"
+            )
+
         if unit is None:
             unit = self.config.get("units", {}).get("cad", "mm")
 
@@ -136,6 +147,14 @@ class ProjectManager:
         Если не передана — берётся из config["units"]["scan"].
         Масштабирование к мм происходит сразу после чтения.
         """
+        ext = os.path.splitext(path)[1].lower()
+        if ext not in self._SUPPORTED_SCAN_EXT:
+            supported = ", ".join(sorted(self._SUPPORTED_SCAN_EXT))
+            raise ValueError(
+                f"Неподдерживаемый формат «{ext}».\n"
+                f"Поддерживаемые форматы облаков точек: {supported}"
+            )
+
         if unit is None:
             unit = self.config.get("units", {}).get("scan", "mm")
 

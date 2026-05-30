@@ -408,15 +408,9 @@ class ViewerWidget(QWidget):
 
         row.addStretch()
 
-        btn_shot = QPushButton("Скриншот")
-        btn_shot.setStyleSheet(cam_style)
-        btn_shot.setToolTip("Снять скриншот 3D-вида для включения в PDF-отчёт")
-        btn_shot.clicked.connect(self._take_screenshot)
-        row.addWidget(btn_shot)
-
         self._toolbar_buttons = [
             self._btn_overlay, self._btn_scan, self._btn_model,
-            btn_reset, btn_shot,
+            btn_reset,
         ]
 
         return bar
@@ -573,7 +567,7 @@ class ViewerWidget(QWidget):
                     render_points_as_spheres=False,
                     show_scalar_bar=True,
                     scalar_bar_args={
-                        "title": "Откл., мм",
+                        "title": "",
                         "n_labels": 5,
                         "fmt": "%+.2f",
                         "color": "white",
