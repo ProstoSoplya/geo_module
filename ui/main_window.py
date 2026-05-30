@@ -279,6 +279,11 @@ class MainWindow(QMainWindow):
     # ── Drag & Drop ────────────────────────────────────────────────
 
     def dragEnterEvent(self, event):
+        # Во время анализа drag&drop игнорируем — даже визуально, чтобы
+        # курсор показывал «нельзя», а не «можно бросить».
+        if self._analysis_state != "idle":
+            event.ignore()
+            return
         if event.mimeData().hasUrls():
             urls = event.mimeData().urls()
             if any(url.isLocalFile() for url in urls):
@@ -287,7 +292,8 @@ class MainWindow(QMainWindow):
         event.ignore()
 
     def dropEvent(self, event):
-        if self._is_busy("загрузка файлов"):
+        if self._analysis_state != "idle":
+            event.ignore()
             return
         urls = event.mimeData().urls()
         for url in urls:
