@@ -127,6 +127,11 @@ def generate_report(
     """
     font_reg, font_bold = _register_fonts()
 
+    # Инициализируем заранее: если исключение случится до их присвоения,
+    # finally-блок безопасно их проигнорирует (был NameError).
+    cbar_path = None
+    hist_path = None
+
     styles = getSampleStyleSheet()
     for s in styles.byName.values():
         if hasattr(s, "fontName"):
@@ -549,6 +554,8 @@ def generate_report(
         doc.build(story)
     finally:
         for tmp in (hist_path, cbar_path):
+            if tmp is None:
+                continue
             try:
                 if os.path.exists(tmp):
                     os.unlink(tmp)
