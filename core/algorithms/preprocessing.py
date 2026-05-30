@@ -129,7 +129,8 @@ def preprocess_pipeline(pcd: o3d.geometry.PointCloud,
     except (ValueError, TypeError):
         voxel_size = 0.0
 
-    if voxel_size <= 0:
+    # `not (voxel_size > 0)` ловит NaN (NaN <= 0 → False, проскакивал бы guard).
+    if not (voxel_size > 0):
         bbox = pcd_clean.get_axis_aligned_bounding_box()
         bbox_diag = float(np.linalg.norm(bbox.get_extent()))
         voxel_size = bbox_diag * 0.015
