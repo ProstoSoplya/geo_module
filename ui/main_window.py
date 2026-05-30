@@ -1098,6 +1098,14 @@ class MainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
             self.worker.wait(3000)
+            # Если поток не успел завершиться — отключаем все сигналы, чтобы
+            # отложенные QueuedConnection emits не вызывали слоты на уже
+            # уничтоженных виджетах (segfault при выходе из приложения).
+            if self.worker.isRunning():
+                try:
+                    self.worker.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
 
         # Спрашиваем про сохранение если есть результаты анализа
         if self.manager.results is not None or self.manager.stats is not None:
