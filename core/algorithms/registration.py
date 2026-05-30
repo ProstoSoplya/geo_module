@@ -304,6 +304,10 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
     # ── Шаг 1: Адаптивные параметры ──────────────────────────────
     ap = _compute_adaptive_params(mesh)
 
+    bbox_diag = ap["bbox_diag"]
+    if bbox_diag < 1e-6:
+        raise RegistrationError("CAD-меш вырожден (нулевой bbox)")
+
     reg_voxel = ap["voxel_size"]
     reuse = (
         pcd_voxel_size > 0
