@@ -144,6 +144,9 @@ class AnalysisWorker(QThread):
         self._log("② Регистрация (совмещение скана с CAD-моделью)...")
         self._emit_progress(35)
 
+        # transform — итоговая 4×4 матрица из ИСХОДНОГО pcd в финальное положение
+        # (включает центроидное предвыравнивание + ICP). Применение к свежему
+        # pcd_full даст совмещение, эквивалентное pcd_registered.
         pcd_registered, transform, reg_rmse, reg_suspect, reg_diag = register_pipeline(
             pcd_clean,
             pcd_down,

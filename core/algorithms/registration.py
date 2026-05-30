@@ -290,11 +290,15 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
     """
     Полный пайплайн регистрации с защитой от ложного 180°-минимума.
 
-    Возвращает: (pcd_registered, transformation, rmse, registration_suspect)
+    Возвращает: (pcd_registered, transformation, rmse, registration_suspect, reg_diagnostics)
         pcd_registered      — зарегистрированное облако точек
-        transformation      — матрица 4×4 (из pcd_full_aligned в финальное положение)
+        transformation      — итоговая матрица 4×4 от ИСХОДНОГО pcd_full в финальное
+                              положение (T_total = T_selected @ T_centroid). Применение
+                              этой матрицы к свежезагруженному pcd_full восстановит
+                              совмещение, эквивалентное pcd_registered.
         rmse                — ICP inlier RMSE финального прохода
         registration_suspect— True если C2M-RMSE победителя > reject_rmse_pct% bbox_diag
+        reg_diagnostics     — словарь диагностики (RMSE проходов, маскировка и т.п.)
     """
 
     # ── Шаг 1: Адаптивные параметры ──────────────────────────────
@@ -515,6 +519,11 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
 
     pcd_registered = pcd_full_aligned.transform(T_selected)
 
+    # T_total: трансформация из ИСХОДНОГО pcd_full в финальное положение.
+    # Сохраняет преварительный центроидный сдвиг T_centroid, без которого
+    # повторное применение к свежезагруженному облаку не восстановит совмещение.
+    T_total = T_selected @ T_centroid
+
     logger.info(
         f"Регистрация завершена (режим={alignment_mode}): "
         f"fitness={r_fine.fitness:.4f}, RMSE={rmse_out:.6f} мм"
@@ -537,4 +546,4 @@ def register_pipeline(pcd_full: o3d.geometry.PointCloud,
         "alignment_mode":             alignment_mode,
     }
 
-    return pcd_registered, T_selected, rmse_out, registration_suspect, reg_diagnostics
+    return pcd_registered, T_total, rmse_out, registration_suspect, reg_diagnostics

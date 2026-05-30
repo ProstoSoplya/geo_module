@@ -202,7 +202,10 @@ class ProjectManager:
         self.ambiguous_mask = results.get("ambiguous_mask")
         self.stats          = results.get("stats")
         self.pcd_registered = results.get("pcd_registered")   # зарегистрированное облако
-        self.transformation = results.get("transform")        # матрица 4×4
+        # transformation: 4×4 от ИСХОДНОГО pcd в финальное положение
+        # (включает центроидное предвыравнивание + ICP). Сохраняется в NPZ и
+        # позволяет полностью восстановить совмещение из свежезагруженного pcd.
+        self.transformation = results.get("transform")
         self.analysis_date  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("Результаты анализа сохранены в ProjectManager")
 

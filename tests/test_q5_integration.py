@@ -136,10 +136,10 @@ _CONFIG = {
 def _run_full_pipeline(pcd, mesh, config):
     """
     Mirrors worker.py: preprocess -> register -> deviations -> statistics.
-    Returns (stats, reg_diag, deviations, pcd_registered).
+    Returns (stats, reg_diag, deviations, pcd_registered, pcd_clean, T_total).
     """
     pcd_clean, pcd_down, voxel_size = preprocess_pipeline(pcd, config)
-    pcd_reg, _T, icp_rmse, suspect, reg_diag = register_pipeline(
+    pcd_reg, T_total, icp_rmse, suspect, reg_diag = register_pipeline(
         pcd_clean, pcd_down, mesh, config, pcd_voxel_size=voxel_size,
     )
     deviations, ambiguous_mask = compute_deviations(pcd_reg, mesh)
@@ -155,7 +155,7 @@ def _run_full_pipeline(pcd, mesh, config):
     stats["registration_rmse"]    = icp_rmse
     stats["registration_suspect"] = suspect
     stats.update(reg_diag)
-    return stats, reg_diag, deviations, pcd_reg
+    return stats, reg_diag, deviations, pcd_reg, pcd_clean, T_total
 
 
 # ── Shared fixture (computed once at module level during standalone run) ───────
@@ -167,10 +167,12 @@ def _ensure_shared():
         return
     mesh = _make_L_shape()
     pcd, n_excess, n_deficit = _make_defective_scan(mesh)
-    stats, reg_diag, deviations, pcd_reg = _run_full_pipeline(pcd, mesh, _CONFIG)
+    (stats, reg_diag, deviations, pcd_reg,
+     pcd_clean, T_total) = _run_full_pipeline(pcd, mesh, _CONFIG)
     _SHARED.update(
         mesh=mesh, pcd=pcd, stats=stats, reg_diag=reg_diag,
         deviations=deviations, pcd_reg=pcd_reg,
+        pcd_clean=pcd_clean, T_total=T_total,
         n_excess=n_excess, n_deficit=n_deficit,
     )
 
@@ -382,6 +384,44 @@ def test_pdf_sections():
             pass
 
 
+# ── Test 5: transformation contract (CRIT-A1) ────────────────────────────────
+
+def test_transformation_includes_centroid():
+    """
+    T_total из register_pipeline должна включать центроидное предвыравнивание:
+    применение T_total к исходному pcd_full (вход register_pipeline) обязано
+    воспроизводить pcd_registered. Это контракт NPZ-сайдкара и save/load_project.
+    """
+    import copy as _copy
+
+    _ensure_shared()
+    pcd_clean = _SHARED["pcd_clean"]
+    pcd_reg   = _SHARED["pcd_reg"]
+    T_total   = _SHARED["T_total"]
+
+    assert T_total is not None, "register_pipeline вернул T_total=None"
+    assert T_total.shape == (4, 4), f"T_total должна быть 4×4, получено {T_total.shape}"
+
+    pcd_replay = _copy.deepcopy(pcd_clean).transform(T_total)
+    replayed   = np.asarray(pcd_replay.points)
+    expected   = np.asarray(pcd_reg.points)
+
+    assert replayed.shape == expected.shape, (
+        f"размеры расходятся: replay={replayed.shape} vs expected={expected.shape}"
+    )
+
+    diffs = np.linalg.norm(replayed - expected, axis=1)
+    rmse  = float(np.sqrt(np.mean(diffs ** 2)))
+    max_d = float(diffs.max())
+
+    print(f"\n[CRIT-A1  Transformation contract]")
+    print(f"  RMSE(T_total @ pcd_clean, pcd_registered) = {rmse:.3e} мм")
+    print(f"  max|Δ|                                    = {max_d:.3e} мм")
+
+    assert rmse < 1e-6, f"RMSE={rmse:.3e} мм > 1e-6 — T_centroid потерян"
+    print("  PASS")
+
+
 # ── Standalone runner ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -401,7 +441,8 @@ if __name__ == "__main__":
     print(f"  Pipeline: preprocess + register + C2M deviations + statistics")
 
     for fn in (test_material_split_invariant, test_worst_points,
-               test_masking_metrics, test_pdf_sections):
+               test_masking_metrics, test_pdf_sections,
+               test_transformation_includes_centroid):
         print()
         print("-" * 70)
         try:
