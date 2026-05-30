@@ -495,6 +495,15 @@ class MainWindow(QMainWindow):
         # кнопок применились ДО того как worker начнёт грузить CPU.
         QApplication.processEvents()
 
+        # Отключаем сигналы предыдущего worker'а, если он ещё не GC.
+        # Иначе отложенные QueuedConnection emits могли бы повторно вызвать
+        # слоты при следующем анализе.
+        if self.worker is not None:
+            try:
+                self.worker.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+
         self.worker = AnalysisWorker(
             self.manager.pcd,
             self.manager.mesh,
