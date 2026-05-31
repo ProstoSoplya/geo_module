@@ -22,6 +22,9 @@ deviation.py — Вычисление отклонений облака точе
 import logging
 import open3d as o3d
 import numpy as np
+from scipy.spatial import cKDTree
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
 logger = logging.getLogger(__name__)
 
@@ -196,13 +199,14 @@ def compute_statistics(
     stats["ambiguous_sign_pct"]   = float(amb_count / n) if n > 0 else 0.0
 
     if point_coords is not None and len(point_coords) == n:
-        stats.update(_build_worst_points(
+        defect_info = _build_defect_info(
             abs_dev, deviations, point_coords, tolerance,
             worst_n, min_cluster_size,
-        ))
-        stats["defect_clusters"] = _build_defect_clusters(
-            abs_dev, deviations, point_coords, tolerance, min_cluster_size,
         )
+        stats["worst_points"]            = defect_info["worst_points"]
+        stats["worst_points_unfiltered"] = defect_info["worst_points_unfiltered"]
+        stats["noise_outlier_count"]     = defect_info["noise_outlier_count"]
+        stats["defect_clusters"]         = defect_info["defect_clusters"]
 
     logger.info(
         f"Статистика: среднее={stats['mean_deviation']:.4f}, "
@@ -216,7 +220,7 @@ def compute_statistics(
     return stats
 
 
-def _build_worst_points(
+def _build_defect_info(
     abs_dev: np.ndarray,
     deviations: np.ndarray,
     point_coords: np.ndarray,
@@ -224,18 +228,29 @@ def _build_worst_points(
     worst_n: int,
     min_cluster_size: int,
 ) -> dict:
-    """Формирует worst_points с фильтрацией шумовых выбросов по локальной плотности."""
+    """Считает worst_points и defect_clusters одним проходом по дефектам.
+
+    Семантика идентична прежним `_build_worst_points` + `_build_defect_clusters`:
+        радиус = 3 * (bbox_diag / n^(1/3));
+        точка — настоящий дефект, если в радиусе ≥ min_cluster_size соседей-
+        кандидатов (порог = min_cluster_size + 1, т.к. поиск включает саму точку);
+        кластеры — компоненты связности графа «расстояние ≤ радиус».
+    Отличие — векторизация: O(N_cand) Python-итераций KDTreeFlann заменены
+    на пакетные scipy.cKDTree-запросы; BFS — на connected_components.
+    """
     n = len(deviations)
     candidate_mask = abs_dev > tolerance
     n_candidates = int(candidate_mask.sum())
 
     unfiltered_idx = np.argsort(abs_dev)[::-1][:worst_n]
+    unfiltered_result = _idx_to_points(unfiltered_idx, point_coords, deviations)
 
     if n_candidates < min_cluster_size:
         return {
-            "worst_points": _idx_to_points(unfiltered_idx, point_coords, deviations),
-            "worst_points_unfiltered": n_candidates < min_cluster_size,
+            "worst_points": unfiltered_result,
+            "worst_points_unfiltered": True,
             "noise_outlier_count": 0,
+            "defect_clusters": [],
         }
 
     candidate_indices = np.nonzero(candidate_mask)[0]
@@ -247,109 +262,77 @@ def _build_worst_points(
     avg_step = bbox_diag / (n ** (1.0 / 3.0))
     radius = 3.0 * avg_step
 
-    pcd_cand = o3d.geometry.PointCloud()
-    pcd_cand.points = o3d.utility.Vector3dVector(candidate_coords)
-    tree = o3d.geometry.KDTreeFlann(pcd_cand)
+    # Один KDTree, один пакетный запрос плотности — заменяет цикл по N_cand
+    tree_cand = cKDTree(candidate_coords)
+    neighbor_counts = np.asarray(
+        tree_cand.query_ball_point(candidate_coords, radius, return_length=True)
+    )
+    threshold = min_cluster_size + 1   # поиск включает саму точку — как у Open3D
+    real_local_mask = neighbor_counts >= threshold
+    noise_count = int((~real_local_mask).sum())
 
-    # search_radius_vector_3d включает саму точку → порог = min_cluster_size + 1
-    threshold = min_cluster_size + 1
-    real_defect_local_mask = np.empty(n_candidates, dtype=bool)
-    for i in range(n_candidates):
-        k, _, _ = tree.search_radius_vector_3d(pcd_cand.points[i], radius)
-        real_defect_local_mask[i] = k >= threshold
-
-    noise_count = int(np.sum(~real_defect_local_mask))
-    real_defect_global_indices = candidate_indices[real_defect_local_mask]
-
-    if len(real_defect_global_indices) == 0:
+    real_global_indices = candidate_indices[real_local_mask]
+    if len(real_global_indices) == 0:
         return {
-            "worst_points": _idx_to_points(unfiltered_idx, point_coords, deviations),
+            "worst_points": unfiltered_result,
             "worst_points_unfiltered": True,
             "noise_outlier_count": noise_count,
+            "defect_clusters": [],
         }
 
-    filtered_abs = abs_dev[real_defect_global_indices]
+    # worst_points — топ-N по |dev| среди подтверждённых дефектов
+    filtered_abs = abs_dev[real_global_indices]
     top_local = np.argsort(filtered_abs)[::-1][:worst_n]
-    top_global = real_defect_global_indices[top_local]
+    top_global = real_global_indices[top_local]
+    worst_points = _idx_to_points(top_global, point_coords, deviations)
+
+    # Кластеры — компоненты связности по тому же радиусу
+    real_coords = candidate_coords[real_local_mask]
+    real_devs = deviations[real_global_indices]
+    defect_clusters = _build_clusters_cc(
+        real_coords, real_devs, radius, min_cluster_size,
+    )
 
     return {
-        "worst_points": _idx_to_points(top_global, point_coords, deviations),
+        "worst_points": worst_points,
         "worst_points_unfiltered": False,
         "noise_outlier_count": noise_count,
+        "defect_clusters": defect_clusters,
     }
 
 
-def _build_defect_clusters(
-    abs_dev: np.ndarray,
-    deviations: np.ndarray,
-    point_coords: np.ndarray,
-    tolerance: float,
+def _build_clusters_cc(
+    coords: np.ndarray,
+    devs: np.ndarray,
+    radius: float,
     min_cluster_size: int,
 ) -> list[dict]:
-    """Группирует дефектные точки (|dev| > tolerance) в кластеры, исключая шум."""
-    candidate_mask = abs_dev > tolerance
-    n_candidates = int(candidate_mask.sum())
-    if n_candidates < min_cluster_size:
+    """Кластеризация компонентами связности по графу «расстояние ≤ radius»."""
+    n = len(coords)
+    if n == 0:
         return []
 
-    candidate_indices = np.nonzero(candidate_mask)[0]
-    candidate_coords = point_coords[candidate_indices]
-    candidate_devs = deviations[candidate_indices]
+    tree = cKDTree(coords)
+    pairs = tree.query_pairs(radius, output_type="ndarray")
 
-    n = len(deviations)
-    bbox_diag = float(np.linalg.norm(
-        point_coords.max(axis=0) - point_coords.min(axis=0)
-    ))
-    avg_step = bbox_diag / (n ** (1.0 / 3.0))
-    radius = 3.0 * avg_step
+    if len(pairs):
+        rows = np.concatenate([pairs[:, 0], pairs[:, 1]])
+        cols = np.concatenate([pairs[:, 1], pairs[:, 0]])
+        data = np.ones(len(rows), dtype=np.int8)
+        graph = coo_matrix((data, (rows, cols)), shape=(n, n))
+    else:
+        graph = coo_matrix((n, n), dtype=np.int8)
 
-    pcd_cand = o3d.geometry.PointCloud()
-    pcd_cand.points = o3d.utility.Vector3dVector(candidate_coords)
-    tree = o3d.geometry.KDTreeFlann(pcd_cand)
+    n_comp, labels = connected_components(graph, directed=False)
 
-    threshold = min_cluster_size + 1
-    real_mask = np.empty(n_candidates, dtype=bool)
-    for i in range(n_candidates):
-        k, _, _ = tree.search_radius_vector_3d(pcd_cand.points[i], radius)
-        real_mask[i] = k >= threshold
-
-    real_local = np.where(real_mask)[0]
-    if len(real_local) == 0:
-        return []
-
-    real_coords = candidate_coords[real_local]
-    real_devs = candidate_devs[real_local]
-
-    pcd_real = o3d.geometry.PointCloud()
-    pcd_real.points = o3d.utility.Vector3dVector(real_coords)
-    tree_real = o3d.geometry.KDTreeFlann(pcd_real)
-
-    visited = np.zeros(len(real_local), dtype=bool)
     clusters = []
-
-    for start in range(len(real_local)):
-        if visited[start]:
+    for label_id in range(n_comp):
+        member_mask = labels == label_id
+        size = int(member_mask.sum())
+        if size < min_cluster_size:
             continue
-        queue = [start]
-        visited[start] = True
-        members = []
-        while queue:
-            cur = queue.pop(0)
-            members.append(cur)
-            k, idx, _ = tree_real.search_radius_vector_3d(
-                pcd_real.points[cur], radius)
-            for j in range(k):
-                nb = idx[j]
-                if not visited[nb]:
-                    visited[nb] = True
-                    queue.append(nb)
-
-        if len(members) < min_cluster_size:
-            continue
-
-        m = np.array(members)
-        m_devs = real_devs[m]
-        m_coords = real_coords[m]
+        m_devs = devs[member_mask]
+        m_coords = coords[member_mask]
         mean_dev = float(np.mean(m_devs))
         max_abs = float(np.max(np.abs(m_devs)))
         center = m_coords.mean(axis=0)
@@ -357,7 +340,7 @@ def _build_defect_clusters(
         clusters.append({
             "type": "Избыток материала" if mean_dev > 0 else "Недостаток материала",
             "max_deviation": max_abs,
-            "point_count": len(members),
+            "point_count": size,
             "center_x": float(center[0]),
             "center_y": float(center[1]),
             "center_z": float(center[2]),
